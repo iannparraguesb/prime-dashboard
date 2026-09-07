@@ -1,0 +1,33 @@
+{
+  "name": "prime-dashboard-contenido",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "api": "node server.mjs",
+    "vite": "vite",
+    "build": "tsc --noEmit && vite build",
+    "check": "tsc --noEmit",
+    "preview": "vite preview",
+    "test": "node --test pruebas/*.test.mjs",
+    "test:unit": "node --test pruebas/n1-puros.test.mjs pruebas/seguridad.test.mjs",
+    "test:integration": "node --test pruebas/n2-supabase.test.mjs pruebas/n3-api.test.mjs"
+  },
+  "dependencies": {
+    "@supabase/auth-js": "^2.116.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.5"
+  },
+  "engines": {
+    "node": "24.x"
+  }
+}
