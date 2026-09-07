@@ -1,5 +1,11 @@
 # Dashboard de inteligencia de contenido — @leo_opazo
 
+## Publicación segura
+
+El repositorio de producción es [iannparraguesb/prime-dashboard](https://github.com/iannparraguesb/prime-dashboard). Vercel debe apuntar a la raíz del repositorio y ejecutar `npm run build`. Configura en Vercel `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `SUPABASE_URL` y `SUPABASE_ANON_KEY`; agrega `UPSTASH_REDIS_REST_URL` y `UPSTASH_REDIS_REST_TOKEN` antes de abrir el servicio, porque el rate limit falla cerrado en producción si no existe un contador compartido. Nunca subas `.env` ni una `SERVICE_ROLE_KEY` al repositorio.
+
+La migración `supabase/migrations/0007_plan_interno.sql` ya fue aplicada al proyecto interno de Supabase. Las migraciones históricas se conservan como referencia y no deben ejecutarse de nuevo sobre una base existente sin revisar su estado.
+
 **Estado:** construido y verificado con datos sintéticos. **Sin datos reales todavía: el token de Meta en `.env` está muerto.** Ver §"Qué necesita" antes de correrlo.
 
 ---
