@@ -7,3 +7,10 @@ dist/
 .tmp/
 *.log
 .DS_Store
+
+# Grafo de conocimiento (graphify). Se versiona solo lo legible por agentes:
+# `wiki/` y `GRAPH_REPORT.md`. El resto se regenera con `/graphify . --update`
+# y solo produciria diffs ruidosos en cada reconstruccion.
+graphify-out/*
+!graphify-out/wiki/
+!graphify-out/GRAPH_REPORT.md
