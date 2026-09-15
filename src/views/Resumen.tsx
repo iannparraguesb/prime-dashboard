@@ -14,8 +14,8 @@ export function Resumen({d}:{d:Analisis}) {
   const antiguedad=d.snapshot?Math.floor((ahora-Date.parse(`${d.snapshot}T00:00:00Z`))/86400000):null;
   const propuesta=d.mesa.propuestas[0];
   return <div className="lista" style={{gap:'var(--e5)'}}>
-    <div className="resumen-encabezado"><div><h2>Tu contenido, con una próxima acción</h2><p>Revisa qué publicaste y qué vale la pena repetir.</p></div>
-    <label>Publicaciones de los últimos <select className="control" value={dias} onChange={e=>setDias(Number(e.target.value))}><option value={7}>7 días</option><option value={30}>30 días</option><option value={90}>90 días</option></select></label></div>
+    <div className="resumen-encabezado"><div><span className="kpi-lbl">Ventana de lectura</span><h2>Tu contenido, con una próxima acción</h2><p>Revisa qué publicaste y qué vale la pena repetir.</p></div>
+    <div className="resumen-periodos" role="group" aria-label="Publicaciones de los últimos días">{[7,30,90,365].map(n=><button key={n} className="chip" aria-pressed={dias===n} onClick={()=>setDias(n)}>{n===365?'12 meses':`${n} días`}</button>)}</div></div>
     <div className="card frescura" role="status" data-antigua={antiguedad===null||antiguedad>2}>
       <strong>{d.snapshot?`Última medición de contenido: ${d.snapshot}`:'Sin medición disponible'}</strong>
       <span>{antiguedad!==null&&antiguedad>2?`Los datos llevan ${antiguedad} días sin una medición nueva. El equipo debe revisar la sincronización.`:'Volver a cargar consulta los datos guardados; no inicia una sincronización de Instagram.'}</span>
@@ -26,7 +26,7 @@ export function Resumen({d}:{d:Analisis}) {
       <Kpi etiqueta="Tasa de guardado típica" valor={pct(medianaDe(solidas.map(p=>p.guardado_pct)),2)} pie={`${solidas.length} piezas con muestra suficiente`} icono="guardado"/>
       <Kpi etiqueta="Alcance acumulado de estas piezas" valor={compacto(suma)} pie="Suma por publicación; no son personas únicas" icono="alcance"/>
     </div>
-    <Base>Seleccionar {dias} días filtra publicaciones por fecha, no limita cuándo recibieron sus interacciones. Las métricas son acumuladas al snapshot. Una métrica no disponible se muestra como —.</Base>
+    <Base>La ventana seleccionada filtra publicaciones por fecha, no limita cuándo recibieron sus interacciones. Las métricas son acumuladas al snapshot. Una métrica no disponible se muestra como —.</Base>
     <section className="card foco-semanal"><span className="kpi-lbl">Para tu próxima sesión de contenido</span><h2>{propuesta?.accion||'Construye tu próxima muestra'}</h2><p>{propuesta?.motivo||'Publica con constancia. Las recomendaciones aparecerán cuando haya suficiente información para comparar piezas del mismo formato.'}</p><a className="btn" href="#mesa">Abrir Mesa de trabajo</a></section>
     <section><h2>Tu referencia por formato</h2><div className="tabla-caja"><table><thead><tr><th>Formato</th><th>Piezas</th><th>Guardado habitual</th></tr></thead><tbody>{Object.entries(d.base_por_formato).map(([f,v])=><tr key={f}><td>{NOMBRE_FORMATO[f]||f}</td><td>{num(v.n)}</td><td>{pct(v.guardado_pct_mediana,2)}</td></tr>)}</tbody></table></div><Base>Mediana por formato en la ventana de {d.ventana_meses||12} meses. Esta referencia no cambia al seleccionar 7/30/90 días arriba.</Base></section>
     <details className="card metodologia"><summary>Cómo leer estos números</summary><Nota>El ranking compara tasas de guardado con la mediana del mismo formato. El piso de {d.piso_alcance} de alcance limita el ruido estadístico, pero nunca oculta tus publicaciones del catálogo.</Nota><Base>{d.n_total} piezas en la ventana · {d.n_con_alcance} con alcance medido · {d.n_solidos} aptas para ranking. Consulta Piezas para revisar el detalle de cada publicación.</Base></details>

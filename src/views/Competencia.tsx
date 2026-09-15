@@ -1,8 +1,28 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { SinDatosSeccion } from "../components/states";
 import { Base, Nota, Badge, num, pct, compacto, fechaCorta, NADA } from "../components/ui";
 import { Icono } from "../components/icons";
-import type { Analisis } from "../tipos";
+import { ordenarCuentas, resumirCuenta } from "../lib/competencia";
+import type { Analisis, PiezaCompetencia } from "../tipos";
+
+type Periodo = 30 | 90 | 365;
+
+const FORMATO: Record<string, string> = {
+  REEL: "Reel",
+  CARRUSEL: "Carrusel",
+  IMAGEN: "Imagen",
+  OTRO: "Otro",
+};
+
+function Miniatura({ pieza }: { pieza: PiezaCompetencia }) {
+  return pieza.thumb ? (
+    <img src={pieza.thumb} alt="" loading="lazy" />
+  ) : (
+    <span className="comp-thumb-vacio" aria-hidden="true">
+      <Icono nombre={pieza.formato === "REEL" ? "vista" : "piezas"} size={16} />
+    </span>
+  );
+}
 
 interface Vigilada {
   id: string;
@@ -39,6 +59,8 @@ export function Competencia({ d, jwt }: { d: Analisis; jwt: string | null }) {
   const [entrada, setEntrada] = useState("");
   const [guardando, setGuardando] = useState(false);
   const [msg, setMsg] = useState<{ tipo: "ok" | "error"; texto: string } | null>(null);
+  const [periodo, setPeriodo] = useState<Periodo>(30);
+  const [cuentaActiva, setCuentaActiva] = useState<string | null>(null);
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -107,7 +129,24 @@ export function Competencia({ d, jwt }: { d: Analisis; jwt: string | null }) {
     } catch(e) { setMsg({tipo:"error",texto:e instanceof Error ? e.message : "No se pudo actualizar."}); }
   };
 
-  const cuentas = Object.entries(d.competencia?.cuentas ?? {});
+  const cuentas = useMemo(() => {
+    const hoy = d.snapshot ? new Date(`${d.snapshot}T12:00:00Z`) : new Date();
+    const filas = Object.entries(d.competencia?.cuentas ?? {}).map(([username, datos]) => ({
+      username,
+      datos,
+      resumen: resumirCuenta(datos.piezas ?? [], hoy, periodo),
+    }));
+    return ordenarCuentas(filas);
+  }, [d.competencia?.cuentas, d.snapshot, periodo]);
+  const medianas = cuentas.map((x) => x.resumen.mediana).filter((x): x is number => x !== null).sort((a, b) => a - b);
+  const medianaMercado = medianas.length
+    ? medianas.length % 2
+      ? medianas[Math.floor(medianas.length / 2)]
+      : (medianas[medianas.length / 2 - 1] + medianas[medianas.length / 2]) / 2
+    : null;
+  const piezasVisibles = cuentaActiva
+    ? cuentas.find((x) => x.username === cuentaActiva)?.datos.piezas ?? []
+    : [];
   const filas = lista?.filas ?? [];
   const tope = lista?.tope ?? 5;
   const activos = lista?.activos ?? 0;
@@ -115,6 +154,65 @@ export function Competencia({ d, jwt }: { d: Analisis; jwt: string | null }) {
 
   return (
     <div className="lista" style={{ gap: "var(--e5)" }}>
+      <section className="comp-hero card">
+        <div>
+          <span className="kpi-lbl">Radar competitivo</span>
+          <h2>Compara señales públicas, sin inventar métricas privadas</h2>
+          <p>Instagram entrega likes, comentarios y seguidores de cuentas Business/Creator públicas. El panel normaliza esas señales como interacción sobre seguidores.</p>
+        </div>
+        <label className="filtro-grupo">
+          <span className="filtro-lbl">Ventana comparable</span>
+          <select className="control" value={periodo} onChange={(e) => setPeriodo(Number(e.target.value) as Periodo)}>
+            <option value={30}>Últimos 30 días</option>
+            <option value={90}>Últimos 90 días</option>
+            <option value={365}>Últimos 12 meses</option>
+          </select>
+        </label>
+      </section>
+
+      <div className="kpis">
+        <div className="card kpi"><div className="kpi-lbl"><Icono nombre="competencia" size={13} /> Cuentas activas</div><div className="kpi-val num">{num(cuentas.length)}</div><div className="kpi-pie">{num(activos)} de {num(tope)} cupos usados</div></div>
+        <div className="card kpi"><div className="kpi-lbl"><Icono nombre="alcance" size={13} /> Mediana del mercado</div><div className="kpi-val num">{pct(medianaMercado, 3)}</div><div className="kpi-pie">interacción / seguidores en {periodo} días</div></div>
+        <div className="card kpi"><div className="kpi-lbl"><Icono nombre="piezas" size={13} /> Piezas medidas</div><div className="kpi-val num">{num(cuentas.reduce((s, x) => s + x.resumen.medidas, 0))}</div><div className="kpi-pie">solo publicaciones con señal disponible</div></div>
+        <div className="card kpi"><div className="kpi-lbl"><Icono nombre="reloj" size={13} /> Mayor cadencia</div><div className="kpi-val num">{cuentas.length ? `${cuentas.reduce((m, x) => Math.max(m, x.resumen.porSemana ?? 0), 0).toLocaleString("es-CL", { maximumFractionDigits: 1 })}/sem` : NADA}</div><div className="kpi-pie">ritmo observado en la ventana</div></div>
+      </div>
+
+      {cuentas.length ? (
+        <section>
+          <div className="comp-seccion-cab"><div><span className="kpi-lbl">Benchmark</span><h2>Quién está ganando atención</h2></div><Base>{num(cuentas.length)} cuentas · ordenadas por interacción mediana</Base></div>
+          <div className="comp-comparativa">
+            {cuentas.map(({ username, datos, resumen }, i) => {
+              const max = Math.max(...cuentas.map((x) => x.resumen.mediana ?? 0), 0.0001);
+              return (
+                <article className="card comp-cuenta" key={username} data-activa={cuentaActiva === username || undefined}>
+                  <div className="comp-cuenta-top"><span className="comp-pos">#{i + 1}</span><Badge tono={i === 0 ? "oro" : undefined}>{resumen.publicadas} piezas / {periodo}d</Badge></div>
+                  <a className="comp-usuario" href={`https://instagram.com/${username}`} target="_blank" rel="noreferrer">@{username}</a>
+                  <div className="comp-seguidores">{compacto(datos.seguidores ?? null)} seguidores</div>
+                  <div className="comp-dato"><strong>{pct(resumen.mediana, 3)}</strong><span>interacción mediana</span></div>
+                  <div className="barra comp-barra"><span style={{ width: `${((resumen.mediana ?? 0) / max) * 100}%` }} /></div>
+                  <div className="comp-meta"><span>{resumen.porSemana == null ? NADA : `${resumen.porSemana.toLocaleString("es-CL")}/sem`}</span><span>{num(resumen.medidas)} medidas</span></div>
+                  <button className="btn comp-ver" onClick={() => setCuentaActiva(cuentaActiva === username ? null : username)}>{cuentaActiva === username ? "Ocultar piezas" : "Ver mejores piezas"}</button>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
+
+      {cuentaActiva ? (
+        <section className="comp-explorador">
+          <div className="comp-seccion-cab"><div><span className="kpi-lbl">Contenido analizado</span><h2>@{cuentaActiva}</h2></div><button className="chip" onClick={() => setCuentaActiva(null)}>Cerrar</button></div>
+          <div className="comp-piezas-grid">
+            {[...piezasVisibles].sort((a, b) => (b.interaccion_sobre_seguidores_pct ?? -1) - (a.interaccion_sobre_seguidores_pct ?? -1)).slice(0, 12).map((p) => (
+              <a className="comp-pieza" href={p.permalink ?? undefined} target="_blank" rel="noreferrer" key={p.id}>
+                <div className="comp-pieza-media"><Miniatura pieza={p} /><Badge>{FORMATO[p.formato ?? ""] ?? p.formato ?? "Pieza"}</Badge></div>
+                <div className="comp-pieza-cuerpo"><p>{p.primera_linea || "Sin texto disponible"}</p><div className="comp-pieza-metricas"><span>♥ {compacto(p.likes)}</span><span>◌ {compacto(p.comentarios)}</span><strong>{pct(p.interaccion_sobre_seguidores_pct, 3)}</strong></div><Base>{fechaCorta(p.fecha)}</Base></div>
+              </a>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
       {/* ---------- alta ---------- */}
       <div className="card" style={{ padding: "var(--e4)" }}>
         <div className="comp-alta">
@@ -164,7 +262,7 @@ export function Competencia({ d, jwt }: { d: Analisis; jwt: string | null }) {
         </Base>
       </div>
 
-      {/* ---------- lista ---------- */}
+      {/* ---------- estado de captura ---------- */}
       {cargando && !filas.length ? (
         <div className="esq" style={{ height: 120 }} />
       ) : lista?.error ? (
@@ -231,47 +329,8 @@ export function Competencia({ d, jwt }: { d: Analisis; jwt: string | null }) {
 
       <Nota>{lista?.nota ?? d.competencia?.nota}</Nota>
 
-      {/* ---------- contenido analizado ---------- */}
-      {cuentas.map(([u, c]) =>
-        c.error ? null : (
-          <section key={u}>
-            <h2 style={{ fontSize: 18, marginBottom: "var(--e3)" }}>
-              @{c.username ?? u} <Badge>{num(c.n_muestra ?? null)} piezas</Badge>
-            </h2>
-            <div className="tabla-caja">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Fecha</th>
-                    <th>Primera línea</th>
-                    <th className="n">Likes</th>
-                    <th className="n">Comentarios</th>
-                    <th className="n">Interacción / seguidores</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(c.piezas ?? []).slice(0, 30).map((p) => (
-                    <tr key={p.id}>
-                      <td>{fechaCorta(p.fecha)}</td>
-                      <td style={{ whiteSpace: "normal", minWidth: 260, maxWidth: 460 }}>
-                        {p.primera_linea || NADA}
-                      </td>
-                      <td className="n">{compacto(p.likes)}</td>
-                      <td className="n">{compacto(p.comentarios)}</td>
-                      <td className="n">{pct(p.interaccion_sobre_seguidores_pct, 3)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <Base>
-              Sin alcance ni guardados: la API no los entrega de cuentas ajenas. La comparación
-              honesta con esta fuente es interacción sobre base de seguidores, y sirve para leer
-              tendencia y tema — no para replicar un ranking.
-            </Base>
-          </section>
-        )
-      )}
+      {/* La exploración visual de piezas vive arriba; esta tabla operativa se mantiene
+          para diagnosticar cola, errores y activar/desactivar cuentas. */}
     </div>
   );
 }

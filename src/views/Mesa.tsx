@@ -30,12 +30,25 @@ export function Mesa({ d, jwt }: { d: Analisis; jwt: string | null }) {
 
   return (
     <div className="lista" style={{ gap: "var(--e5)" }}>
+      <div className="mesa-encabezado">
+        <div>
+          <span className="eyebrow">Siguiente semana</span>
+          <h2>De insight a producción</h2>
+          <p>Elige una recomendación, conviértela en una pieza y muévela hasta publicada.</p>
+        </div>
+        <Badge tono="oro">{p.length} oportunidades</Badge>
+      </div>
       <PlanSemanal jwt={jwt} propuestas={p} />
       <Nota>
         Estas propuestas salen de la comparacion contra la mediana del mismo formato, no de una opinion. Si el
         motivo no te convence, el motivo esta escrito: discutelo contra el numero.
       </Nota>
 
+      <section className="mesa-oportunidades">
+        <div className="mesa-seccion-titulo">
+          <div><span className="eyebrow">Backlog recomendado</span><h2>Oportunidades priorizadas</h2></div>
+          <span>{p.length} propuestas con evidencia</span>
+        </div>
       {Object.entries(grupos).map(([accion, items]) => (
         <section key={accion}>
           <h2 style={{ fontSize: 18, marginBottom: "var(--e3)" }}>
@@ -69,6 +82,7 @@ export function Mesa({ d, jwt }: { d: Analisis; jwt: string | null }) {
           </div>
         </section>
       ))}
+      </section>
 
       <Base>Criterio aplicado: {d.mesa.criterio}</Base>
     </div>

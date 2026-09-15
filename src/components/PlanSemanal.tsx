@@ -21,8 +21,8 @@ export function PlanSemanal({jwt,propuestas}:{jwt:string|null;propuestas:Propues
     <form className="plan-form" onSubmit={e=>{e.preventDefault();void guardar('POST',{titulo,nota:nota||null,fecha:fecha||null});}}>
       <label>Próxima pieza<input className="control" value={titulo} maxLength={160} required onChange={e=>setTitulo(e.target.value)} placeholder="Qué voy a publicar"/></label>
       <label>Fecha prevista<input className="control" type="date" value={fecha} onChange={e=>setFecha(e.target.value)}/></label>
-      <label>Notas: hook, guion, visual o CTA<textarea className="control" maxLength={2000} value={nota} onChange={e=>setNota(e.target.value)}/></label>
-      <button className="btn" disabled={ocupado||!titulo.trim()}>Guardar idea</button>
+      <label>Notas: hook, guion, visual o CTA<textarea className="control" maxLength={2000} value={nota} onChange={e=>setNota(e.target.value)} placeholder="Qué debe llevar la pieza y por qué"/></label>
+      <button className="btn btn-primario" disabled={ocupado||!titulo.trim()}>{ocupado?'Guardando…':'Guardar idea'}</button>
     </form>
     {propuestas.length?<div className="acciones-plan"><button className="btn" onClick={()=>{setTitulo(propuestas[0].titulo.slice(0,160));setNota(propuestas[0].motivo.slice(0,2000));}}>Usar la primera recomendación</button></div>:null}
     {mensaje?<p role="status">{mensaje}</p>:null}

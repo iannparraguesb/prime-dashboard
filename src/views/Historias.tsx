@@ -33,6 +33,13 @@ export function Historias({ d }: { d: Analisis }) {
   }
 
   const conAlcance = h.filas.filter((f) => f.alcance !== null);
+  const faltantes = h.filas.filter((f) => f.metricas_faltantes.length).length;
+  const tiempo = (hora: string | null) => hora ? Date.parse(hora) : 0;
+  const primera = [...h.filas].sort((a, b) => tiempo(a.hora) - tiempo(b.hora))[0] ?? null;
+  const ultima = [...h.filas].sort((a, b) => tiempo(b.hora) - tiempo(a.hora))[0] ?? null;
+  const retencion = primera?.alcance && ultima?.alcance != null
+    ? (ultima.alcance / primera.alcance) * 100
+    : null;
   const mejor = [...conAlcance].sort(
     (a, b) => (b.visita_perfil_pct ?? -1) - (a.visita_perfil_pct ?? -1)
   )[0];
@@ -49,10 +56,10 @@ export function Historias({ d }: { d: Analisis }) {
         </div>
         <div className="card kpi">
           <div className="kpi-lbl">
-            <Icono nombre="alcance" size={13} /> Alcance de la primera
+            <Icono nombre="alcance" size={13} /> Retención observada
           </div>
-          <div className="kpi-val num">{compacto(h.filas[h.filas.length - 1]?.alcance ?? null)}</div>
-          <div className="kpi-pie">la caida entre la primera y la ultima es la retencion de la secuencia</div>
+          <div className="kpi-val num">{pct(retencion, 1)}</div>
+          <div className="kpi-pie">alcance de la última sobre la primera capturada</div>
         </div>
         <div className="card kpi">
           <div className="kpi-lbl">
@@ -103,10 +110,10 @@ export function Historias({ d }: { d: Analisis }) {
       </div>
 
       <Base>
-        Ordenadas de la mas reciente a la mas antigua. El % al perfil es visitas al perfil sobre alcance: es la
+        Ordenadas de la mas reciente a la mas antigua. Última captura observada: <b>{horaCorta(ultima?.hora)}</b>. El % al perfil es visitas al perfil sobre alcance: es la
         metrica que dice si la historia empujo a alguien a dar el siguiente paso.{" "}
-        {h.filas.filter((f) => f.metricas_faltantes.length).length > 0
-          ? `${h.filas.filter((f) => f.metricas_faltantes.length).length} historias con metricas que la API no devolvio; aparecen como guion, no como cero.`
+        {faltantes > 0
+          ? `${faltantes} historias con metricas que la API no devolvio; aparecen como guion, no como cero.`
           : ""}
       </Base>
 

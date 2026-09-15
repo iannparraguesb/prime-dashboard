@@ -86,6 +86,9 @@ export function Calendario({ d }: { d: Analisis }) {
   const pref = claveMes(cursor.anio, cursor.mes);
   const delMes = filas.filter((f) => f.fecha.startsWith(pref));
   const visiblesMes = delMes.filter((f) => filtro === "todo" || f.formato === filtro);
+  const diasPublicados = new Set(visiblesMes.map((f) => f.fecha)).size;
+  const aptasMes = visiblesMes.filter((f) => f.apto_ranking).length;
+  const ritmo = diasEnMes ? (visiblesMes.length / diasEnMes) * 7 : 0;
   const hoy = new Date().toISOString().slice(0, 10);
 
   const mover = (paso: number) => {
@@ -128,6 +131,13 @@ export function Calendario({ d }: { d: Analisis }) {
         </div>
       </div>
 
+      <div className="cal-resumen" aria-label="Resumen del mes">
+        <div className="card"><span className="kpi-lbl">Publicaciones</span><strong>{num(visiblesMes.length)}</strong><small>con el filtro actual</small></div>
+        <div className="card"><span className="kpi-lbl">Días activos</span><strong>{num(diasPublicados)}</strong><small>con al menos una publicación</small></div>
+        <div className="card"><span className="kpi-lbl">Cadencia</span><strong>{ritmo.toLocaleString("es-CL", { maximumFractionDigits: 1 })}/sem</strong><small>ritmo del mes completo</small></div>
+        <div className="card"><span className="kpi-lbl">Muestra sólida</span><strong>{num(aptasMes)}</strong><small>superan el piso de alcance</small></div>
+      </div>
+
       <div className="card cal-caja">
         <div className="cal-grilla cal-cabecera">
           {DIAS.map((x) => (
@@ -144,28 +154,37 @@ export function Calendario({ d }: { d: Analisis }) {
                 <span className="cal-num">{dia}</span>
                 {piezas.length ? (
                   <div className="cal-piezas">
-                    {piezas.slice(0, 4).map((p) => (
-                      <a
-                        key={p.id}
-                        className="cal-pieza"
-                        href={p.permalink ?? undefined}
-                        target="_blank"
-                        rel="noreferrer"
-                        style={{ borderColor: COLOR[p.formato ?? ""] ?? "var(--linea-fuerte)" }}
-                        title={
-                          `${p.primera_linea || "(sin texto)"}\n` +
-                          `${p.formato ?? NADA} · guardado ${pct(p.guardado_pct, 2)} · ${mult(p.multiplicador)}` +
-                          (p.apto_ranking ? "" : "\nBajo el piso de alcance: no entra a rankings")
-                        }
-                      >
-                        {p.thumb ? (
-                          <img src={p.thumb} alt="" loading="lazy" />
-                        ) : (
-                          <span className="cal-sin-img" />
-                        )}
-                        {!p.apto_ranking ? <span className="cal-bajo-piso" /> : null}
-                      </a>
-                    ))}
+                    {piezas.slice(0, 4).map((p) => {
+                      const contenido = p.thumb ? <img src={p.thumb} alt="" loading="lazy" /> : <span className="cal-sin-img" />;
+                      const titulo =
+                        `${p.primera_linea || "(sin texto)"}\n` +
+                        `${p.formato ?? NADA} · guardado ${pct(p.guardado_pct, 2)} · ${mult(p.multiplicador)}` +
+                        (p.apto_ranking ? "" : "\nBajo el piso de alcance: no entra a rankings");
+                      return p.permalink ? (
+                        <a
+                          key={p.id}
+                          className="cal-pieza"
+                          href={p.permalink}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{ borderColor: COLOR[p.formato ?? ""] ?? "var(--linea-fuerte)" }}
+                          title={titulo}
+                        >
+                          {contenido}
+                          {!p.apto_ranking ? <span className="cal-bajo-piso" /> : null}
+                        </a>
+                      ) : (
+                        <span
+                          key={p.id}
+                          className="cal-pieza"
+                          style={{ borderColor: COLOR[p.formato ?? ""] ?? "var(--linea-fuerte)" }}
+                          title={titulo}
+                        >
+                          {contenido}
+                          {!p.apto_ranking ? <span className="cal-bajo-piso" /> : null}
+                        </span>
+                      );
+                    })}
                     {piezas.length > 4 ? (
                       <span className="cal-mas">+{piezas.length - 4}</span>
                     ) : null}

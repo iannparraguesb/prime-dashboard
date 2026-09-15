@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useApi } from '../hooks/useApi';
 import { ReelCard } from '../components/ReelCard';
 import { Vista, EsqueletoGrilla } from '../components/states';
-import { Base } from '../components/ui';
+import { Base, Kpi } from '../components/ui';
 import type { Analisis, Pieza, Rol } from '../tipos';
 
 interface Catalogo {filas:(Pieza & {apto_ranking:boolean})[];total:number;pagina:number;paginas:number;error?:string}
@@ -34,7 +34,13 @@ export function Piezas({d,rol,jwt}:{d:Analisis;rol:Rol;jwt:string|null}) {
     <Base>El período filtra la fecha de publicación. Las métricas son acumuladas hasta su medición. Las piezas bajo {d.piso_alcance} de alcance siguen visibles; no se comparan como una muestra sólida.</Base>
     <Vista estado={estado} esqueleto={<EsqueletoGrilla />}>
       {c=><>
-        <p role="status">{c.total} publicaciones · Página {c.pagina} de {c.paginas}</p>
+        <div className="piezas-cabecera">
+          <div className="kpis piezas-kpis">
+            <Kpi etiqueta="Resultados" valor={c.total.toLocaleString('es-CL')} pie="publicaciones con estos filtros" icono="piezas" />
+            <Kpi etiqueta="Página" valor={`${c.pagina}/${c.paginas}`} pie="24 piezas por página" icono="vista" />
+            <Kpi etiqueta="Muestra sólida visible" valor={c.filas.filter(p=>p.apto_ranking).length.toLocaleString('es-CL')} pie="en esta página" icono="alcance" />
+          </div>
+        </div>
         {!c.filas.length?<div className="card estado"><h3>No hay publicaciones con estos filtros</h3><p>Amplía el período o borra la búsqueda.</p><button className="btn" onClick={()=>{setBusqueda('');setF({...f,buscar:'',dias:'365',formato:'todos',solidas:false,pagina:1});}}>Restablecer filtros</button></div>:null}
         <div className="grilla">{c.filas.map(p=><div key={p.id}>{!p.apto_ranking?<p className="base">Muestra insuficiente para ranking</p>:null}<ReelCard pieza={p} orden={f.orden==='fecha'?'fecha':f.orden==='alcance'?'alcance':'guardado_pct'}/></div>)}</div>
         <div className="acciones-plan"><button className="btn" disabled={f.pagina<=1} onClick={()=>setF({...f,pagina:f.pagina-1})}>Anterior</button><button className="btn" disabled={f.pagina>=c.paginas} onClick={()=>setF({...f,pagina:f.pagina+1})}>Siguiente</button></div>

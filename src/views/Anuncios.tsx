@@ -46,6 +46,18 @@ export function Anuncios({ d }: { d: Analisis }) {
     });
   }, [datos, orden, filtro]);
 
+  const monedas = useMemo(() => {
+    const salida: Record<string, { gasto: number; conversaciones: number; anuncios: number }> = {};
+    for (const a of datos?.filas ?? []) {
+      const moneda = a.moneda ?? "Sin moneda";
+      const grupo = salida[moneda] ??= { gasto: 0, conversaciones: 0, anuncios: 0 };
+      grupo.gasto += a.gasto ?? 0;
+      grupo.conversaciones += a.conversaciones ?? 0;
+      grupo.anuncios += 1;
+    }
+    return salida;
+  }, [datos]);
+
   if (!datos || !datos.filas.length) {
     return (
       <SinDatosSeccion
@@ -55,11 +67,13 @@ export function Anuncios({ d }: { d: Analisis }) {
     );
   }
 
-  const moneda = datos.monedas[0] ?? null;
+  const moneda = datos.monedas.length === 1 ? datos.monedas[0] : null;
   const activos = datos.filas.filter((a) => a.estado === "ACTIVE");
   const conConv = datos.filas.filter((a) => (a.conversaciones ?? 0) > 0);
-  const gasto = datos.filas.reduce((s, a) => s + (a.gasto ?? 0), 0);
-  const conv = datos.filas.reduce((s, a) => s + (a.conversaciones ?? 0), 0);
+  const totales = Object.entries(monedas);
+  const grupoPrincipal = totales.length === 1 ? totales[0] : null;
+  const gasto = grupoPrincipal?.[1].gasto ?? 0;
+  const conv = grupoPrincipal?.[1].conversaciones ?? 0;
   const dark = datos.filas.filter((a) => a.es_dark_post === true).length;
 
   const cuenta = (f: Filtro) =>
@@ -72,18 +86,18 @@ export function Anuncios({ d }: { d: Analisis }) {
       <div className="kpis">
         <div className="card kpi">
           <div className="kpi-lbl"><Icono nombre="alcance" size={13} /> Gasto total</div>
-          <div className="kpi-val num">{compacto(gasto)}</div>
-          <div className="kpi-pie">{moneda} · histórico completo</div>
+          <div className="kpi-val num">{grupoPrincipal ? money(gasto, moneda) : NADA}</div>
+          <div className="kpi-pie">{grupoPrincipal ? "histórico completo" : "varias monedas: ver desglose"}</div>
         </div>
         <div className="card kpi">
           <div className="kpi-lbl"><Icono nombre="comentario" size={13} /> Conversaciones</div>
-          <div className="kpi-val num">{num(conv)}</div>
-          <div className="kpi-pie">en {num(conConv.length)} de {num(datos.filas.length)} anuncios</div>
+          <div className="kpi-val num">{grupoPrincipal ? num(conv) : NADA}</div>
+          <div className="kpi-pie">{grupoPrincipal ? `en ${num(conConv.length)} de ${num(datos.filas.length)} anuncios` : "no se suman entre monedas"}</div>
         </div>
         <div className="card kpi">
           <div className="kpi-lbl"><Icono nombre="guardado" size={13} /> Costo por conversación</div>
-          <div className="kpi-val num">{conv ? money(Math.round(gasto / conv), moneda) : NADA}</div>
-          <div className="kpi-pie">gasto total sobre conversaciones totales</div>
+          <div className="kpi-val num">{grupoPrincipal && conv ? money(Math.round(gasto / conv), moneda) : NADA}</div>
+          <div className="kpi-pie">{grupoPrincipal ? "gasto total sobre conversaciones totales" : "se calcula por moneda"}</div>
         </div>
         <div className="card kpi">
           <div className="kpi-lbl"><Icono nombre="piezas" size={13} /> Anuncios activos</div>
@@ -93,6 +107,21 @@ export function Anuncios({ d }: { d: Analisis }) {
       </div>
 
       <Nota>{datos.nota}</Nota>
+
+      {totales.length > 1 ? (
+        <section>
+          <h2 style={{ fontSize: 18, marginBottom: "var(--e3)" }}>Totales por moneda</h2>
+          <div className="kpis">
+            {totales.map(([codigo, total]) => (
+              <div className="card kpi" key={codigo}>
+                <div className="kpi-lbl">{codigo}</div>
+                <div className="kpi-val num">{money(total.gasto, codigo)}</div>
+                <div className="kpi-pie">{num(total.conversaciones)} conversaciones · {num(total.anuncios)} anuncios · {total.conversaciones ? money(Math.round(total.gasto / total.conversaciones), codigo) : NADA} / conversación</div>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       {dark > 0 ? (
         <Nota>
@@ -179,7 +208,8 @@ export function Anuncios({ d }: { d: Analisis }) {
         {modo === "tarjetas" ? (
           <div className="ads-grilla">
             {filas.map((a, i) => {
-              const parte = gasto > 0 ? ((a.gasto ?? 0) / gasto) * 100 : 0;
+              const gastoMoneda = monedas[a.moneda ?? "Sin moneda"]?.gasto ?? 0;
+              const parte = gastoMoneda > 0 ? ((a.gasto ?? 0) / gastoMoneda) * 100 : 0;
               const activo = a.estado === "ACTIVE";
               return (
                 <article className="ads-card" key={a.id} data-activo={activo || undefined}>

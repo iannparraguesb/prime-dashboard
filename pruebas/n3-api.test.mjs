@@ -1,6 +1,6 @@
 import {test,before,after} from 'node:test';
 import assert from 'node:assert/strict';
-import {levantarApi,bajarApi,obtenerJwt,leerRest} from './_ayuda.mjs';
+import { levantarApi, bajarApi, obtenerJwt, leerRest, contarFilas } from './_ayuda.mjs';
 let api,jwt,analisis;
 before(async()=>{api=await levantarApi();jwt=await obtenerJwt();const r=await fetch(api.base+'/api/analisis',{headers:{authorization:`Bearer ${jwt}`}});assert.equal(r.status,200);analisis=await r.json();assert.ok(!analisis.error,analisis.error);});
 after(async()=>await bajarApi(api));
@@ -14,9 +14,15 @@ test('métodos y rutas incorrectos no hacen trabajo de dominio',async()=>{
  assert.equal((await pedir('/api/catalogo?pagina=-1')).status,400);
 });
 test('contrato de ventana: cuenta todas las publicaciones actuales sin anclas temporales obsoletas',async()=>{
- const r=await leerRest('v_pieza_ranking?select=post_id,en_ventana,apto_ranking&cuenta_id=not.like.externa:*');
- assert.equal(analisis.n_total,r.cuerpo.filter(x=>x.en_ventana).length);
- assert.equal(analisis.n_solidos,r.cuerpo.filter(x=>x.apto_ranking).length);
+ // No descargar la vista completa: PostgREST pagina a 1.000 filas por defecto.
+ // El historial ya supera ese limite, y filtrar en JS producia un conteo parcial.
+ const propias='v_pieza_ranking?cuenta_id=not.like.externa:*';
+ const [enVentana,solidas]=await Promise.all([
+  contarFilas(`${propias}&en_ventana=is.true`),
+  contarFilas(`${propias}&apto_ranking=is.true`),
+ ]);
+ assert.equal(analisis.n_total,enVentana);
+ assert.equal(analisis.n_solidos,solidas);
  assert.equal(analisis.calendario.length,analisis.n_total);
  assert.equal(analisis.rankings.todas.length,analisis.n_solidos);
 });

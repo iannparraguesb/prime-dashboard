@@ -875,6 +875,57 @@ select.control {
   gap: var(--e3);
 }
 
+/* --- pulido operativo: calendario, catalogo y mesa --- */
+.cal-resumen {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--e3);
+}
+.cal-resumen .card {
+  padding: var(--e4);
+  display: grid;
+  gap: 4px;
+}
+.cal-resumen strong {
+  font-family: var(--display);
+  font-size: clamp(22px, 3vw, 30px);
+  letter-spacing: -0.03em;
+}
+.cal-resumen small { color: var(--texto-3); }
+.piezas-cabecera { margin: var(--e2) 0 var(--e3); }
+.piezas-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.mesa-encabezado,
+.mesa-seccion-titulo {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: var(--e4);
+}
+.mesa-encabezado {
+  padding: var(--e5);
+  border: 1px solid var(--linea);
+  border-radius: var(--radio);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--prime-gold) 12%, var(--superficie)), var(--superficie));
+}
+.mesa-encabezado h2,
+.mesa-seccion-titulo h2 { margin: 4px 0; }
+.mesa-encabezado p,
+.mesa-seccion-titulo > span { color: var(--texto-2); }
+.mesa-oportunidades { display: grid; gap: var(--e5); }
+.eyebrow {
+  color: var(--acento-claro);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .15em;
+  text-transform: uppercase;
+}
+.btn-primario {
+  background: var(--prime-gold);
+  border-color: var(--prime-gold-bright);
+  color: var(--fondo);
+  font-weight: 700;
+}
+
 /* ==========================================================================
    Movil — el avatar y el equipo entran desde el celular
    ========================================================================== */
@@ -922,6 +973,20 @@ select.control {
   .propuesta {
     grid-template-columns: 64px 1fr;
   }
+  .cal-resumen,
+  .piezas-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .mesa-encabezado,
+  .mesa-seccion-titulo {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 460px) {
+  .cal-resumen,
+  .piezas-kpis { grid-template-columns: 1fr; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1432,8 +1497,30 @@ select.control {
   line-height: 1.55;
 }
 
+/* Radar competitivo: lectura ejecutiva + exploracion visual. */
+.comp-hero {
+  display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:end;
+  gap:var(--e5); padding:clamp(20px,3vw,32px); overflow:hidden; position:relative;
+  background:radial-gradient(640px 240px at 4% 0%,rgba(232,176,60,.10),transparent 62%),linear-gradient(145deg,rgba(25,19,9,.98),rgba(10,8,5,.98));
+}
+.comp-hero::after {content:"";position:absolute;inset:0 0 auto;height:1px;background:linear-gradient(90deg,var(--prime-gold-bright),transparent 58%);opacity:.7}
+.comp-hero h2{margin:6px 0;font-size:clamp(22px,3vw,30px);letter-spacing:-.035em}.comp-hero p{margin:0;color:var(--texto-2);max-width:70ch}.comp-hero .filtro-grupo{min-width:210px}
+.comp-seccion-cab{display:flex;align-items:end;justify-content:space-between;gap:var(--e4);margin-bottom:var(--e3)}.comp-seccion-cab h2{margin:4px 0 0;font-size:20px;letter-spacing:-.02em}.comp-seccion-cab .base{margin:0}
+.comp-comparativa{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:var(--e3)}
+.comp-cuenta{padding:var(--e4);transition:transform var(--transicion),border-color var(--transicion),background var(--transicion)}.comp-cuenta:hover,.comp-cuenta[data-activa="true"]{transform:translateY(-2px);border-color:rgba(232,176,60,.48);background:var(--superficie-alta)}
+.comp-cuenta-top,.comp-meta{display:flex;align-items:center;justify-content:space-between;gap:var(--e2)}.comp-pos{color:var(--prime-gold);font-family:var(--mono);font-size:12px;font-weight:700}.comp-usuario{display:block;margin-top:var(--e4);color:var(--texto);font-size:15px;font-weight:700;overflow-wrap:anywhere}.comp-seguidores{margin-top:2px;color:var(--texto-3);font-size:12px}
+.comp-dato{display:flex;align-items:baseline;justify-content:space-between;gap:var(--e2);margin-top:var(--e5)}.comp-dato strong{font-family:var(--display);font-size:24px;line-height:1}.comp-dato span{color:var(--texto-3);font-size:11px}.comp-barra{height:5px;margin-top:var(--e2)}.comp-barra span{background:linear-gradient(90deg,var(--prime-bronze),var(--prime-gold-bright))}.comp-meta{margin-top:var(--e3);color:var(--texto-3);font-size:11px}.comp-ver{width:100%;margin-top:var(--e4);justify-content:center}
+.comp-explorador{animation:entrar 220ms ease-out}.comp-piezas-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:var(--e3)}
+.comp-pieza{min-width:0;overflow:hidden;color:inherit;border:1px solid var(--linea);border-radius:var(--radio);background:var(--superficie);transition:transform var(--transicion),border-color var(--transicion)}.comp-pieza:hover{transform:translateY(-2px);border-color:var(--linea-fuerte);color:inherit}.comp-pieza-media{height:132px;position:relative;display:grid;place-items:center;overflow:hidden;background:linear-gradient(135deg,var(--superficie-alta),var(--bg))}.comp-pieza-media>img{width:100%;height:100%;object-fit:cover}.comp-pieza-media .badge{position:absolute;top:var(--e2);right:var(--e2);backdrop-filter:blur(8px)}.comp-thumb-vacio{color:var(--texto-3)}.comp-pieza-cuerpo{padding:var(--e3)}.comp-pieza-cuerpo p{margin:0;min-height:3em;line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.comp-pieza-metricas{display:flex;align-items:center;gap:var(--e3);margin-top:var(--e3);color:var(--texto-3);font-size:11px}.comp-pieza-metricas strong{margin-left:auto;color:var(--acento-claro)}
+@media(max-width:760px){.comp-hero{grid-template-columns:1fr;align-items:stretch}.comp-hero .filtro-grupo{min-width:0}.comp-seccion-cab{align-items:flex-start;flex-direction:column}.comp-comparativa{grid-template-columns:1fr}.comp-piezas-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:480px){.comp-piezas-grid{grid-template-columns:1fr}}
+
 /* Flujo diario de Leo */
 .resumen-encabezado { display:flex; align-items:center; justify-content:space-between; gap:20px; flex-wrap:wrap; }
+.resumen-periodos { display:flex; gap:6px; padding:4px; border:1px solid var(--linea); background:var(--superficie); border-radius:999px; }
+.resumen-periodos .chip { min-height:32px; }
+.audiencia-hero {padding:clamp(20px,3vw,32px);background:radial-gradient(520px 220px at 0 0,rgba(232,176,60,.09),transparent 60%),var(--superficie)}
+.audiencia-hero h2{margin:6px 0;font-size:clamp(24px,3vw,34px);letter-spacing:-.035em}.audiencia-hero p{margin:0;color:var(--texto-3)}
 .frescura { padding:16px 20px; display:flex; flex-direction:column; gap:6px; border-left:3px solid var(--prime-gold); }
 .frescura[data-antigua="true"] { border-left-color:#e9a349; background:rgba(233,163,73,.07); }
 .foco-semanal,.metodologia {padding:24px;}
