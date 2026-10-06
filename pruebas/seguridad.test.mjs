@@ -30,6 +30,28 @@ test('un fallo del contador compartido no habilita acceso',async(t)=>{
   await assert.rejects(()=>rateLimit('prod',60,{UPSTASH_REDIS_REST_URL:'https://invalid.test',UPSTASH_REDIS_REST_TOKEN:'dummy'}),e=>e.status===503);
 });
 
+test('el contador acepta las variables KV_REST_API_* de la integración de Vercel', async(t)=>{
+  const llamadas = [];
+  t.mock.method(globalThis,'fetch',async(url,opts)=>{ llamadas.push({url, auth: opts.headers.authorization});
+    return { ok: true, json: async()=>({result: 1}) }; });
+  const env = {VERCEL:'1', KV_REST_API_URL:'https://kv.test', KV_REST_API_TOKEN:'escritura',
+               KV_REST_API_READ_ONLY_TOKEN:'solo-lectura'};
+  assert.equal(await rateLimit('prod',60,env), true);
+  assert.equal(llamadas[0].url, 'https://kv.test');
+  assert.equal(llamadas[0].auth, 'Bearer escritura', 'nunca debe usar el token de solo lectura');
+});
+test('UPSTASH_REDIS_REST_* tiene prioridad sobre KV_REST_API_*', async(t)=>{
+  let usada;
+  t.mock.method(globalThis,'fetch',async(url)=>{ usada = url; return { ok: true, json: async()=>({result: 1}) }; });
+  await rateLimit('prod',60,{VERCEL:'1', UPSTASH_REDIS_REST_URL:'https://up.test', UPSTASH_REDIS_REST_TOKEN:'a',
+                             KV_REST_API_URL:'https://kv.test', KV_REST_API_TOKEN:'b'});
+  assert.equal(usada, 'https://up.test');
+});
+test('solo el token de lectura no basta: produccion sigue fallando cerrado', async()=>{
+  await assert.rejects(()=>rateLimit('prod',60,{VERCEL:'1', KV_REST_API_URL:'https://kv.test',
+    KV_REST_API_READ_ONLY_TOKEN:'solo-lectura'}), e=>e.status===503);
+});
+
 test('body de Vercel conserva validación de tipo y tamaño', async()=> {
   const req = body => ({headers: {'content-type':'application/json'}, body});
   assert.deepEqual(await readBody(req({titulo:'Idea'})), {titulo:'Idea'});

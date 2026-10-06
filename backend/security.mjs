@@ -58,17 +58,31 @@ export function uuid(value) {
   return value;
 }
 
+/** Credenciales del contador compartido (Upstash Redis, API REST).
+ *  Acepta los dos nombres que existen en la practica: `UPSTASH_REDIS_REST_*`
+ *  (Upstash directo) y `KV_REST_API_*`, que es como los inyecta la integracion
+ *  de Upstash del Marketplace de Vercel. Sin este fallback el proyecto de Vercel
+ *  tenia el contador configurado y aun asi respondia 503 a todo.
+ *  Nunca usa KV_REST_API_READ_ONLY_TOKEN: el contador hace INCR y necesita escribir. */
+export function sharedCounter(env) {
+  return {
+    url: env.UPSTASH_REDIS_REST_URL || env.KV_REST_API_URL || '',
+    token: env.UPSTASH_REDIS_REST_TOKEN || env.KV_REST_API_TOKEN || '',
+  };
+}
+
 // Solo respaldo de desarrollo. En producción el contador compartido es obligatorio.
 const windows = new Map();
 export async function rateLimit(key, limit, env, now = Date.now()) {
   const bucket = Math.floor(now / 60000);
   const hash = createHash('sha256').update(key).digest('hex');
-  if (env.UPSTASH_REDIS_REST_URL && env.UPSTASH_REDIS_REST_TOKEN) {
+  const { url: counterUrl, token: counterToken } = sharedCounter(env);
+  if (counterUrl && counterToken) {
     const script = "local n=redis.call('INCR',KEYS[1]); if n==1 then redis.call('EXPIRE',KEYS[1],120) end; return n";
     let r;
     try {
-      r = await fetch(env.UPSTASH_REDIS_REST_URL, {
-        method: 'POST', headers: { authorization: `Bearer ${env.UPSTASH_REDIS_REST_TOKEN}`, 'content-type': 'application/json' },
+      r = await fetch(counterUrl, {
+        method: 'POST', headers: { authorization: `Bearer ${counterToken}`, 'content-type': 'application/json' },
         body: JSON.stringify(['EVAL', script, '1', `prime:rate:${bucket}:${hash}`]),
         signal: AbortSignal.timeout(4000),
       });
