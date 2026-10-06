@@ -61,7 +61,7 @@ vigentes se aplicaron a mano y **no están en el repo**. Tampoco está el DDL de
 versionarlo como migración base, eliminar las policies `USING (true)` y montar una prueba que recree la base desde
 cero en PGlite y verifique que anon no lee nada. Requiere `SUPABASE_DB_URL` en el `.env` (ver checklist §0).
 
-### A-02 · Media · Tablas históricas con una sola capa de protección · CORREGIDO, PENDIENTE DE APLICAR
+### A-02 · Media · Tablas históricas con una sola capa de protección · CORREGIDO Y APLICADO 2026-10-06
 
 El usuario de rol `lectura` tenía privilegio `INSERT/UPDATE/DELETE` en 13 tablas (concesión por defecto de
 Supabase). RLS lo frenaba (update → 0 filas, insert → `violates row-level security`), pero era la única barrera.
@@ -70,7 +70,7 @@ Supabase). RLS lo frenaba (update → 0 filas, insert → `violates row-level se
 `authenticated` y toda lectura a `anon`, excepto en `cuenta_vigilada` y `dashboard_tarea`, que son las únicas donde
 escribe el panel. Probada en réplica: idempotente; competidores, plan e ingesta siguen funcionando.
 
-### A-03 · Media · Registro abierto en Supabase Auth · ABIERTO (acción de Iann)
+### A-03 · Media · Registro abierto en Supabase Auth · CORREGIDO 2026-10-06
 
 `/auth/v1/settings` → `disable_signup: false`. Cualquiera puede crear una cuenta con correo. Exige confirmación y la
 lista blanca impide ver datos, pero cada cuenta creada obtiene un JWT `authenticated` y queda a una policy mal escrita
@@ -135,21 +135,22 @@ Responsables: **Claude Code** construye, prueba, commitea y aplica; **Iann** hac
 
 - [ ] Agregar `SUPABASE_DB_URL` al `.env` de `Prime club` (Project Settings → Database → Connection string → URI).
       Desbloquea A-01 y que las migraciones las aplique Claude Code sin copiar y pegar.
-- [ ] Autorizar a Claude Code a hacer commit y push en `prime-dashboard` (ya no ejecuta Codex).
+- [x] Autorizar a Claude Code a hacer commit y push en `prime-dashboard` (ya no ejecuta Codex).
 
 ### §1 · Producción interna (Iann y Leo)
 
-- [ ] **Iann** — aplicar `0010` en el SQL Editor · Claude Code verifica después
-- [ ] **Iann** — desactivar registro abierto (A-03)
+- [x] **Iann** — aplicar `0010` en el SQL Editor · verificado: escritura del navegador → 403 en las 13 tablas
+- [x] **Iann** — desactivar registro abierto (A-03) · verificado: `disable_signup: true`
 - [ ] **Iann** — Acceso total al disco para `/usr/sbin/cron` (A-05)
-- [ ] **Claude Code** — commit de lo pendiente: migraciones 0008–0010, pruebas multiusuario, arreglos de
+- [x] **Claude Code** — commit de lo pendiente (`fcde5e2`, `a4649cb`): migraciones 0008–0010, pruebas multiusuario, arreglos de
       `theme.css` y `Login.tsx`, README, `docs/`, `package.json`
 - [ ] **Claude Code** — decidir con Iann qué hacer con `src/views/Competencia.tsx` (cambio sin commitear de origen
       desconocido), `.agents/`, `.claude/`, `skills-lock.json` y `PROMPT-CODEX-DESPLIEGUE.md`
-- [ ] **Iann** — crear la base en Upstash (plan gratis) y pasar `UPSTASH_REDIS_REST_URL`/`TOKEN`
-- [ ] **Iann** — proyecto en Vercel (Root Directory = raíz) · **Claude Code** prepara las 6 variables, solo en Production
-- [ ] **Claude Code** — tres puertas: `/api/health` 200 · `/api/salud` sin sesión 401 · local y producción con las
-      mismas cifras
+- [x] Upstash conectado por la integración de Vercel (`KV_REST_API_*`; el código ahora acepta ese nombre)
+- [x] Proyecto en Vercel con variables de Supabase solo en Production · desplegado en `https://prime-dashboard-gamma.vercel.app`
+- [x] **Claude Code** — tres puertas: `/api/health` 200 · `/api/salud` sin sesión 401 · producción = base (172 en ventana)
+- [ ] **Iann** — vincular la cuenta de GitHub `iannparraguesb` en Vercel → Account Settings → Authentication. Hasta
+      entonces los despliegues por `git push` quedan *Blocked* (autor sin permiso) y se despliega por CLI sin Git
 - [ ] **Iann** — comprar dominio y conectarlo · **Claude Code** verifica HSTS y CSP en el dominio
 - [ ] **Claude Code** — mover el token de Instagram a cabecera (A-09)
 - [ ] **Iann** — renovar el token de Instagram antes del **29 de octubre**
