@@ -12,9 +12,10 @@ export function Login({ s }: { s: EstadoSesion }) {
         <div className="card login-caja" data-tipo="error">
           <h1>Falta configuración</h1>
           <p>
-            No hay <code>VITE_SUPABASE_URL</code> ni <code>VITE_SUPABASE_ANON_KEY</code>. Se
-            generan desde el <code>.env</code> de la raíz del repo al archivo{" "}
-            <code>projects/dashboard-contenido/.env.local</code>.
+            No hay <code>VITE_SUPABASE_URL</code> ni <code>VITE_SUPABASE_ANON_KEY</code>. Agrégalas
+            al <code>.env</code> de la raíz de este repo con el mismo valor que{" "}
+            <code>SUPABASE_URL</code> y <code>SUPABASE_ANON_KEY</code> (ver <code>.env.example</code>),
+            y reinicia <code>npm run dev</code>: Vite solo las lee al arrancar.
           </p>
         </div>
       </div>
@@ -49,6 +50,7 @@ export function Login({ s }: { s: EstadoSesion }) {
         <label className="login-campo">
           <span>Correo</span>
           <input
+            className="control"
             type="email"
             autoComplete="username"
             value={email}
@@ -61,6 +63,7 @@ export function Login({ s }: { s: EstadoSesion }) {
         <label className="login-campo">
           <span>Clave</span>
           <input
+            className="control"
             type="password"
             autoComplete="current-password"
             value={clave}

@@ -74,14 +74,21 @@ python3 tools/ig_dump.py
 # 2. Verificar el clasificador de pilares antes de confiar en él
 python3 tools/ig_pilares.py --verificar data/instagram/engagement-$(date +%F).json
 
-# 3. Analizar
+# 3. Analizar (contrato de datos y verificacion; el panel ya no lee este archivo)
 python3 tools/ig_analizar.py
 
-# 4. Levantar el panel
-cd projects/dashboard-contenido
+# 4. Cargar el snapshot a Supabase — el panel lee de aqui, no de los JSON
+python3 tools/ig_a_supabase.py --miniaturas
+#   Idempotente: correrlo dos veces no duplica. --miniaturas copia al bucket las
+#   portadas que falten de piezas en ventana (las URLs de Instagram caducan en ~5 dias).
+#   Pilares: solo anade; --reclasificar reemplaza y exige un lexico que pase --verificar.
+
+# 5. Levantar el panel (la app vive en la raiz de ESTE repo, ~/Desktop/prime-dashboard)
 npm install          # solo la primera vez
 npm run dev          # backend en :5175 + panel en http://localhost:5174
 ```
+
+Los pasos 1-4 corren desde la raiz del workspace `Prime club`, donde viven `tools/` y `.env`.
 
 Banderas útiles del extractor:
 
@@ -97,9 +104,17 @@ Banderas útiles del extractor:
 La API **no tiene archivo de historias**: solo devuelve las activas de las últimas 24 horas. Sin una corrida diaria, esa sección solo puede mostrar las de hoy. Si quieres serie histórica:
 
 ```bash
-# en crontab, 22:00 todos los días
-0 22 * * * cd "/Users/iannprrgz/Desktop/Prime club" && /usr/bin/python3 tools/ig_dump.py --solo historias
+# crontab real (cada 4 horas): historias y competencia escriben directo en Supabase
+0  */4 * * * cd "/Users/iannprrgz/Desktop/Prime club" && /usr/bin/python3 tools/ig_historias.py   >> ".../data/instagram/historias-cron.log"   2>&1
+10 */4 * * * cd "/Users/iannprrgz/Desktop/Prime club" && /usr/bin/python3 tools/ig_competencia.py >> ".../data/instagram/competencia-cron.log" 2>&1
 ```
+
+> ⚠️ **Si el log repite `can't open file ... Operation not permitted`, no es un bug del script: es macOS.**
+> `cron` no tiene permiso para leer `~/Desktop` (protección TCC). El mismo comando funciona desde
+> la terminal y falla desde cron. Arreglo: *Ajustes del Sistema → Privacidad y seguridad → Acceso
+> total al disco → +* y agregar `/usr/sbin/cron` (⌘⇧G para escribir la ruta). Alternativa: mover el
+> workspace fuera de Escritorio/Documentos/Descargas. Mientras no se haga, hay que correr los dos
+> scripts a mano; entre el 30 de agosto y el 22 de septiembre de 2026 no se capturó ninguna historia por esto.
 
 ---
 

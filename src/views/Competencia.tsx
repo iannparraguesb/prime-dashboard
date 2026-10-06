@@ -220,7 +220,7 @@ export function Competencia({ d, jwt }: { d: Analisis; jwt: string | null }) {
             <span className="filtro-lbl">Agregar competidor</span>
             <input
               aria-label="Agregar competidor"
-              className="comp-input"
+              className="control"
               value={entrada}
               onChange={(e) => setEntrada(e.target.value)}
               onKeyDown={(e) => {

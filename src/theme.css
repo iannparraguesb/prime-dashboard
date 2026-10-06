@@ -80,12 +80,11 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--texto);
-  font-family: var(--sans);
-  font-size: 14px;
-  line-height: 1.6;
+  font-family: var(--sans, -apple-system, BlinkMacSystemFont, "San Francisco", "Inter", sans-serif);
   -webkit-font-smoothing: antialiased;
-  font-variant-numeric: tabular-nums;
-  font-feature-settings: "tnum" 1, "ss01" 1;
+  -moz-osx-font-smoothing: grayscale;
+  line-height: 1.5;
+  font-size: 14px;
   /* Textura de fondo: dos radiales en capas + grano SVG, para que el negro no
      sea un plano muerto. */
   background-image: radial-gradient(1100px 620px at 12% -8%, rgba(168, 95, 8, 0.16), transparent 62%),
@@ -203,14 +202,14 @@ a {
   align-items: center;
   gap: var(--e3);
   width: 100%;
-  padding: 9px var(--e3);
+  padding: 10px 14px;
   background: transparent;
   border: 1px solid transparent;
   border-radius: var(--radio-sm);
   color: var(--texto-2);
   font: inherit;
-  text-align: left;
-  cursor: pointer;
+  font-weight: 500;
+  transition: all var(--transicion);
 }
 .nav button:hover {
   background: var(--superficie-alta);
@@ -221,17 +220,18 @@ a {
 }
 .nav button[aria-current="true"] {
   background: var(--superficie-alta);
-  border-color: transparent;
+  border-color: var(--linea);
   color: var(--acento-claro);
   position: relative;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 /* La seccion activa se marca con una espina dorada al costado, no con un
    bloque de color: mantiene el peso visual en los datos. */
 .nav button[aria-current="true"]::before {
   content: "";
   position: absolute;
-  left: calc(-1 * var(--e4) + 1px);
-  inset-block: 4px;
+  left: 0;
+  inset-block: 6px;
   width: 3px;
   border-radius: 0 3px 3px 0;
   background: linear-gradient(180deg, var(--prime-gold-bright), var(--prime-bronze));
@@ -310,7 +310,9 @@ a {
   background: var(--superficie);
   border: 1px solid var(--linea);
   border-radius: var(--radio);
-  box-shadow: var(--sombra);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.2);
+  transition: box-shadow var(--transicion);
+  overflow: hidden;
 }
 
 .kpis {
@@ -319,9 +321,14 @@ a {
   gap: var(--e3);
 }
 .kpi {
-  padding: var(--e4);
+  padding: var(--e4) var(--e5);
   position: relative;
   overflow: hidden;
+  border-radius: var(--radio);
+  transition: background var(--transicion);
+}
+.kpi:hover {
+  background: var(--superficie-alta);
 }
 .kpi::after {
   content: "";
@@ -338,6 +345,7 @@ a {
   display: flex;
   align-items: center;
   gap: 6px;
+  font-weight: 500;
 }
 .kpi-val {
   font-family: var(--display);
@@ -354,7 +362,8 @@ a {
 .kpi-pie {
   font-size: 12px;
   color: var(--texto-3);
-  margin-top: var(--e1);
+  margin-top: 6px;
+  line-height: 1.4;
 }
 
 .badge {
@@ -743,57 +752,84 @@ th.n {
 .filtro-grupo {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 .filtro-lbl {
   font-size: 11px;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
   color: var(--texto-3);
+  letter-spacing: 0.06em;
+  font-weight: 500;
 }
 .chips {
   display: flex;
-  gap: var(--e1);
+  gap: var(--e2);
   flex-wrap: wrap;
 }
 .chip {
-  padding: 5px 10px;
+  padding: 6px 12px;
   border-radius: 999px;
-  border: 1px solid var(--linea-fuerte);
-  background: transparent;
+  border: 1px solid var(--linea);
+  background: var(--superficie-alta);
   color: var(--texto-2);
   font: inherit;
-  font-size: 12px;
+  font-size: 13px;
   cursor: pointer;
   white-space: nowrap;
+  transition: all var(--transicion);
+  display: inline-flex;
+  align-items: center;
 }
 .chip:hover:not(:disabled) {
-  border-color: var(--prime-gold);
-  color: var(--acento-claro);
+  border-color: var(--prime-gold-pale);
+  background: var(--flotante);
+  color: var(--texto);
 }
 .chip[aria-pressed="true"] {
   background: var(--prime-gold);
   border-color: var(--prime-gold);
   color: var(--prime-ink);
-  font-weight: 600;
+  font-weight: 500;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
 }
 .chip:disabled {
   opacity: 0.35;
   cursor: not-allowed;
+  background: transparent;
 }
 .chip-n {
   opacity: 0.72;
-  margin-left: 5px;
+  margin-left: 6px;
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
+  background: rgba(0,0,0,0.15);
+  padding: 2px 6px;
+  border-radius: 99px;
 }
-select.control {
-  padding: 7px 10px;
+.chip[aria-pressed="true"] .chip-n {
+  background: rgba(0,0,0,0.1);
+  color: var(--prime-ink);
+}
+.control,
+input.control,
+select.control,
+textarea.control {
+  padding: 8px 12px;
   border-radius: var(--radio-sm);
   border: 1px solid var(--linea-fuerte);
   background: var(--superficie-alta);
   color: var(--texto);
   font: inherit;
   font-size: 13px;
+  transition: border-color var(--transicion), box-shadow var(--transicion);
+  width: 100%;
+}
+.control:focus-visible {
+  outline: none;
+  border-color: var(--prime-gold-bright);
+  box-shadow: 0 0 0 1px var(--prime-gold-bright);
+}
+select.control {
   cursor: pointer;
 }
 
@@ -1227,18 +1263,6 @@ select.control {
   letter-spacing: 0.06em;
   color: var(--texto-3);
 }
-.login-campo input {
-  padding: 10px var(--e3);
-  border-radius: var(--radio-sm);
-  border: 1px solid var(--linea-fuerte);
-  background: var(--superficie-alta);
-  color: var(--texto);
-  font: inherit;
-  font-size: 14px;
-}
-.login-campo input:focus-visible {
-  border-color: var(--prime-gold);
-}
 .login-error {
   display: flex;
   align-items: flex-start;
@@ -1287,18 +1311,6 @@ select.control {
   gap: var(--e3);
   flex-wrap: wrap;
 }
-.comp-input {
-  padding: 9px var(--e3);
-  border-radius: var(--radio-sm);
-  border: 1px solid var(--linea-fuerte);
-  background: var(--superficie-alta);
-  color: var(--texto);
-  font: inherit;
-  font-size: 13px;
-  width: 100%;
-}
-.comp-input:focus-visible { border-color: var(--prime-gold); }
-.comp-input:disabled { opacity: 0.5; }
 .comp-cupo {
   display: flex;
   flex-direction: column;
