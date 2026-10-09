@@ -1,49 +1,46 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { SinDatosSeccion } from "../components/states";
-import { Base, Nota, num, pct, mult, NADA } from "../components/ui";
+import { NOMBRE_FORMATO, num, compacto, NADA } from "../components/ui";
 import { Icono } from "../components/icons";
 import type { Analisis, FilaCalendario } from "../tipos";
 
 const MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
   "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
-const DIAS = ["LU", "MA", "MI", "JU", "VI", "SA", "DO"];
+const DIAS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 
 type Filtro = "todo" | "REEL" | "CARRUSEL" | "IMAGEN";
-
-const TIPOS: { valor: Filtro; texto: string; color: string }[] = [
-  { valor: "todo", texto: "Todo", color: "var(--texto-3)" },
-  { valor: "REEL", texto: "Reels", color: "var(--prime-gold-bright)" },
-  { valor: "CARRUSEL", texto: "Carruseles", color: "var(--prime-amber)" },
-  { valor: "IMAGEN", texto: "Imagen", color: "var(--prime-bronze)" },
+const TIPOS: { valor: Filtro; texto: string }[] = [
+  { valor: "todo", texto: "Todo" },
+  { valor: "REEL", texto: "Reels" },
+  { valor: "CARRUSEL", texto: "Carruseles" },
+  { valor: "IMAGEN", texto: "Fotos" },
 ];
 
-const COLOR: Record<string, string> = {
-  REEL: "var(--prime-gold-bright)",
-  CARRUSEL: "var(--prime-amber)",
-  IMAGEN: "var(--prime-bronze)",
-};
-
-/** Lunes = 0. `getDay()` devuelve domingo = 0, que descoloca la grilla. */
-function diaSemanaLunes(d: Date) {
-  return (d.getDay() + 6) % 7;
-}
-
-function claveMes(a: number, m: number) {
-  return `${a}-${String(m + 1).padStart(2, "0")}`;
-}
+const claveMes = (a: number, m: number) => `${a}-${String(m + 1).padStart(2, "0")}`;
+/** Fecha local de Chile de una hora ISO: una historia de las 23:00 es de ese dia, no del siguiente en UTC. */
+const fechaChile = (iso: string) => new Date(iso).toLocaleDateString("en-CA", { timeZone: "America/Santiago" });
 
 export function Calendario({ d }: { d: Analisis }) {
   const filas = d.calendario ?? [];
   const [filtro, setFiltro] = useState<Filtro>("todo");
+  const [abierta, setAbierta] = useState<FilaCalendario | null>(null);
 
-  // Arrancar en el mes de la publicacion mas reciente, no en el mes actual:
-  // si Leo lleva dos semanas sin publicar, abrir en un mes vacio no dice nada.
   const inicial = useMemo(() => {
     const f = filas[0]?.fecha;
     const base = f ? new Date(`${f}T12:00:00`) : new Date();
     return { anio: base.getFullYear(), mes: base.getMonth() };
   }, [filas]);
   const [cursor, setCursor] = useState(inicial);
+
+  const historiasPorDia = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const h of d.historias?.filas ?? []) {
+      if (!h.hora) continue;
+      const f = fechaChile(h.hora);
+      m.set(f, (m.get(f) ?? 0) + 1);
+    }
+    return m;
+  }, [d.historias]);
 
   const porDia = useMemo(() => {
     const m = new Map<string, FilaCalendario[]>();
@@ -55,139 +52,87 @@ export function Calendario({ d }: { d: Analisis }) {
     return m;
   }, [filas, filtro]);
 
-  const cuentaPorFormato = useMemo(() => {
-    const c: Record<string, number> = {};
-    const pref = claveMes(cursor.anio, cursor.mes);
-    for (const f of filas) {
-      if (!f.fecha.startsWith(pref)) continue;
-      c[f.formato ?? "?"] = (c[f.formato ?? "?"] ?? 0) + 1;
-    }
-    return c;
-  }, [filas, cursor]);
+  useEffect(() => {
+    if (!abierta) return;
+    const cerrar = (e: KeyboardEvent) => e.key === "Escape" && setAbierta(null);
+    window.addEventListener("keydown", cerrar);
+    return () => window.removeEventListener("keydown", cerrar);
+  }, [abierta]);
 
   if (!filas.length) {
-    return (
-      <SinDatosSeccion
-        titulo="Sin publicaciones cargadas"
-        porque="La API no devolvio el campo `calendario`. Si el backend es anterior a esta seccion, reinicia el servidor."
-      />
-    );
+    return <SinDatosSeccion titulo="Todavía no hay publicaciones" porque="Aparecerán aquí apenas se sincronice Instagram." />;
   }
 
+  const pref = claveMes(cursor.anio, cursor.mes);
   const primero = new Date(cursor.anio, cursor.mes, 1);
   const diasEnMes = new Date(cursor.anio, cursor.mes + 1, 0).getDate();
-  const offset = diaSemanaLunes(primero);
-  const celdas: (number | null)[] = [
-    ...Array.from({ length: offset }, () => null),
-    ...Array.from({ length: diasEnMes }, (_, i) => i + 1),
-  ];
-  while (celdas.length % 7 !== 0) celdas.push(null);
+  const offset = (primero.getDay() + 6) % 7;
+  const celdas: (number | null)[] = [...Array(offset).fill(null), ...Array.from({ length: diasEnMes }, (_, i) => i + 1)];
+  while (celdas.length % 7) celdas.push(null);
 
-  const pref = claveMes(cursor.anio, cursor.mes);
   const delMes = filas.filter((f) => f.fecha.startsWith(pref));
-  const visiblesMes = delMes.filter((f) => filtro === "todo" || f.formato === filtro);
-  const diasPublicados = new Set(visiblesMes.map((f) => f.fecha)).size;
-  const aptasMes = visiblesMes.filter((f) => f.apto_ranking).length;
-  const ritmo = diasEnMes ? (visiblesMes.length / diasEnMes) * 7 : 0;
-  const hoy = new Date().toISOString().slice(0, 10);
+  const visibles = delMes.filter((f) => filtro === "todo" || f.formato === filtro);
+  const historiasMes = [...historiasPorDia].filter(([f]) => f.startsWith(pref)).reduce((s, [, n]) => s + n, 0);
+  const alcanceMes = visibles.reduce((s, p) => s + (p.alcance ?? 0), 0);
+  const diasActivos = new Set([...visibles.map((f) => f.fecha), ...[...historiasPorDia.keys()].filter((f) => f.startsWith(pref))]).size;
+  const hoy = new Date().toLocaleDateString("en-CA", { timeZone: "America/Santiago" });
 
   const mover = (paso: number) => {
     const nm = cursor.mes + paso;
-    setCursor({
-      anio: cursor.anio + Math.floor(nm / 12),
-      mes: ((nm % 12) + 12) % 12,
-    });
+    setCursor({ anio: cursor.anio + Math.floor(nm / 12), mes: ((nm % 12) + 12) % 12 });
   };
 
   return (
     <div className="lista" style={{ gap: "var(--e4)" }}>
       <div className="card cal-barra">
-        <div className="chips">
-          {TIPOS.map((t) => {
-            const n = t.valor === "todo" ? delMes.length : (cuentaPorFormato[t.valor] ?? 0);
-            return (
-              <button
-                key={t.valor}
-                className="chip"
-                aria-pressed={filtro === t.valor}
-                onClick={() => setFiltro(t.valor)}
-              >
-                {t.texto}
-                <span className="chip-n">{n}</span>
-              </button>
-            );
-          })}
-        </div>
         <div className="cal-nav">
-          <button className="btn" onClick={() => mover(-1)} aria-label="Mes anterior">
-            <Icono nombre="arriba" size={14} />
-          </button>
-          <h2 className="cal-mes">
-            {MESES[cursor.mes]} {cursor.anio}
-          </h2>
-          <button className="btn" onClick={() => mover(1)} aria-label="Mes siguiente">
-            <Icono nombre="arriba" size={14} />
-          </button>
+          <button className="btn" onClick={() => mover(-1)} aria-label="Mes anterior"><Icono nombre="arriba" size={14} /></button>
+          <h2 className="cal-mes">{MESES[cursor.mes]} {cursor.anio}</h2>
+          <button className="btn" onClick={() => mover(1)} aria-label="Mes siguiente"><Icono nombre="arriba" size={14} /></button>
+        </div>
+        <div className="chips">
+          {TIPOS.map((t) => (
+            <button key={t.valor} className="chip" aria-pressed={filtro === t.valor} onClick={() => setFiltro(t.valor)}>
+              {t.texto}
+              <span className="chip-n">{t.valor === "todo" ? delMes.length : delMes.filter((f) => f.formato === t.valor).length}</span>
+            </button>
+          ))}
         </div>
       </div>
 
-      <div className="cal-resumen" aria-label="Resumen del mes">
-        <div className="card"><span className="kpi-lbl">Publicaciones</span><strong>{num(visiblesMes.length)}</strong><small>con el filtro actual</small></div>
-        <div className="card"><span className="kpi-lbl">Días activos</span><strong>{num(diasPublicados)}</strong><small>con al menos una publicación</small></div>
-        <div className="card"><span className="kpi-lbl">Cadencia</span><strong>{ritmo.toLocaleString("es-CL", { maximumFractionDigits: 1 })}/sem</strong><small>ritmo del mes completo</small></div>
-        <div className="card"><span className="kpi-lbl">Muestra sólida</span><strong>{num(aptasMes)}</strong><small>superan el piso de alcance</small></div>
+      <div className="cal-resumen">
+        <div className="card"><span className="kpi-lbl">Publicaciones</span><strong>{num(visibles.length)}</strong></div>
+        <div className="card"><span className="kpi-lbl">Historias</span><strong>{num(historiasMes)}</strong></div>
+        <div className="card"><span className="kpi-lbl">Alcance</span><strong>{compacto(alcanceMes)}</strong></div>
+        <div className="card"><span className="kpi-lbl">Días con contenido</span><strong>{num(diasActivos)} <small>de {diasEnMes}</small></strong></div>
       </div>
 
       <div className="card cal-caja">
         <div className="cal-grilla cal-cabecera">
-          {DIAS.map((x) => (
-            <div key={x} className="cal-dia-nombre">{x}</div>
-          ))}
+          {DIAS.map((x) => <div key={x} className="cal-dia-nombre">{x}</div>)}
         </div>
         <div className="cal-grilla">
           {celdas.map((dia, i) => {
             if (dia === null) return <div key={i} className="cal-celda" data-vacia="true" />;
             const fecha = `${pref}-${String(dia).padStart(2, "0")}`;
             const piezas = porDia.get(fecha) ?? [];
+            const hist = historiasPorDia.get(fecha) ?? 0;
             return (
               <div key={i} className="cal-celda" data-hoy={fecha === hoy || undefined}>
-                <span className="cal-num">{dia}</span>
+                <div className="cal-celda-top">
+                  <span className="cal-num">{dia}</span>
+                  {hist ? <span className="cal-historias" title={`${hist} ${hist === 1 ? "historia" : "historias"}`}>{hist}</span> : null}
+                </div>
                 {piezas.length ? (
-                  <div className="cal-piezas">
-                    {piezas.slice(0, 4).map((p) => {
-                      const contenido = p.thumb ? <img src={p.thumb} alt="" loading="lazy" /> : <span className="cal-sin-img" />;
-                      const titulo =
-                        `${p.primera_linea || "(sin texto)"}\n` +
-                        `${p.formato ?? NADA} · guardado ${pct(p.guardado_pct, 2)} · ${mult(p.multiplicador)}` +
-                        (p.apto_ranking ? "" : "\nBajo el piso de alcance: no entra a rankings");
-                      return p.permalink ? (
-                        <a
-                          key={p.id}
-                          className="cal-pieza"
-                          href={p.permalink}
-                          target="_blank"
-                          rel="noreferrer"
-                          style={{ borderColor: COLOR[p.formato ?? ""] ?? "var(--linea-fuerte)" }}
-                          title={titulo}
-                        >
-                          {contenido}
-                          {!p.apto_ranking ? <span className="cal-bajo-piso" /> : null}
-                        </a>
-                      ) : (
-                        <span
-                          key={p.id}
-                          className="cal-pieza"
-                          style={{ borderColor: COLOR[p.formato ?? ""] ?? "var(--linea-fuerte)" }}
-                          title={titulo}
-                        >
-                          {contenido}
-                          {!p.apto_ranking ? <span className="cal-bajo-piso" /> : null}
-                        </span>
-                      );
-                    })}
-                    {piezas.length > 4 ? (
-                      <span className="cal-mas">+{piezas.length - 4}</span>
-                    ) : null}
+                  <div className="cal-piezas" data-n={Math.min(piezas.length, 2)}>
+                    {piezas.slice(0, 2).map((p, k) => (
+                      <button key={p.id} className="cal-pieza" onClick={() => setAbierta(p)} aria-label={`Ver publicación del ${dia}`}>
+                        {p.thumb ? <img src={p.thumb} alt="" loading="lazy" /> : <span className="cal-sin-img" />}
+                        {p.formato === "REEL" ? <span className="cal-icono-reel"><Icono nombre="vista" size={11} /></span> : null}
+                        {k === 1 && piezas.length > 2 ? <span className="cal-mas">+{piezas.length - 2}</span> : null}
+                        <span className="cal-alcance">{compacto(p.alcance ?? null)}</span>
+                      </button>
+                    ))}
                   </div>
                 ) : null}
               </div>
@@ -196,37 +141,42 @@ export function Calendario({ d }: { d: Analisis }) {
         </div>
       </div>
 
-      <div className="card cal-pie">
-        <div className="cal-leyenda">
-          {TIPOS.filter((t) => t.valor !== "todo").map((t) => (
-            <span key={t.valor}>
-              <i style={{ background: t.color }} /> {t.texto}
-            </span>
-          ))}
-          <span>
-            <i className="cal-punto-piso" /> Bajo el piso de alcance
-          </span>
-        </div>
-        <strong>
-          {num(visiblesMes.length)} {visiblesMes.length === 1 ? "publicación" : "publicaciones"} en{" "}
-          {MESES[cursor.mes]}
-        </strong>
+      <div className="cal-leyenda">
+        <span><span className="cal-historias">3</span> historias ese día</span>
+        <span><Icono nombre="alcance" size={12} /> el número sobre cada publicación es su alcance</span>
       </div>
 
-      <Base>
-        A diferencia del resto del panel, el calendario muestra <b>todas</b> las piezas, también
-        las que no superan el piso de {num(d.piso_alcance)} de alcance — van marcadas con un punto.
-        Un calendario que esconde publicaciones miente sobre la cadencia. Ventana de análisis: últimos 12 meses, {num(filas.length)} piezas. El contenido
-        anterior sigue en la base pero no se muestra.
-      </Base>
+      {abierta ? <Detalle p={abierta} cerrar={() => setAbierta(null)} /> : null}
+    </div>
+  );
+}
 
-      <Nota>
-        Esto muestra lo <b>ya publicado</b>, tomado de Instagram. Para que Leo <b>planifique</b> aquí
-        —agendar una pieza antes de grabarla, marcar historias— hace falta escritura: una tabla de
-        contenido planificado, autenticación para saber quién escribe, y revisar la decisión de que
-        la v1 fuera de solo lectura. Es la mitad que falta, y es una decisión tuya, no un pendiente
-        técnico.
-      </Nota>
+function Detalle({ p, cerrar }: { p: FilaCalendario; cerrar: () => void }) {
+  const fecha = new Date(`${p.fecha}T12:00:00`).toLocaleDateString("es-CL", { weekday: "long", day: "numeric", month: "long" });
+  const mets: [string, number | null | undefined][] = [
+    ["Alcance", p.alcance],
+    ["Reproducciones", p.vistas],
+    ["Guardados", p.guardados],
+    ["Me gusta", p.likes],
+    ["Comentarios", p.comentarios],
+    ["Compartidos", p.compartidos],
+  ];
+  return (
+    <div className="cal-modal-fondo" onClick={cerrar}>
+      <div className="card cal-modal" role="dialog" aria-modal="true" aria-label="Detalle de la publicación" onClick={(e) => e.stopPropagation()}>
+        <button className="btn cal-modal-cerrar" onClick={cerrar} aria-label="Cerrar">✕</button>
+        <div className="cal-modal-media">{p.thumb ? <img src={p.thumb} alt="" /> : <span className="cal-sin-img" />}</div>
+        <div className="cal-modal-cuerpo">
+          <span className="kpi-lbl">{NOMBRE_FORMATO[p.formato ?? ""] ?? p.formato} · <span style={{ textTransform: "capitalize" }}>{fecha}</span></span>
+          <p>{p.primera_linea || "Sin texto"}</p>
+          <div className="cal-modal-mets">
+            {mets.filter(([, v]) => v !== undefined).map(([t, v]) => (
+              <div key={t}><strong>{v === null ? NADA : compacto(v ?? null)}</strong><span>{t}</span></div>
+            ))}
+          </div>
+          {p.permalink ? <a className="btn" href={p.permalink} target="_blank" rel="noreferrer">Ver en Instagram</a> : null}
+        </div>
+      </div>
     </div>
   );
 }

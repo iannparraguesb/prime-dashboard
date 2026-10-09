@@ -12,18 +12,20 @@ const Historias = lazy(() => import("./views/Historias").then(m => ({ default: m
 const Competencia = lazy(() => import("./views/Competencia").then(m => ({ default: m.Competencia })));
 const Audiencia = lazy(() => import("./views/Audiencia").then(m => ({ default: m.Audiencia })));
 const Anuncios = lazy(() => import("./views/Anuncios").then(m => ({ default: m.Anuncios })));
+const Negocio = lazy(() => import("./views/Negocio").then(m => ({ default: m.Negocio })));
 const Mesa = lazy(() => import("./views/Mesa").then(m => ({ default: m.Mesa })));
 import type { Analisis, Rol } from "./tipos";
 
-type Seccion = "resumen" | "calendario" | "piezas" | "palabra-clave" | "historias" | "competencia" | "audiencia" | "anuncios" | "mesa";
+type Seccion = "resumen" | "calendario" | "piezas" | "palabra-clave" | "historias" | "competencia" | "audiencia" | "anuncios" | "mesa" | "negocio";
 
 const SECCIONES: { id: Seccion; texto: string; icono: NombreIcono; pregunta: string }[] = [
-  { id: "resumen", texto: "Resumen", icono: "resumen", pregunta: "Como viene el mes." },
+  { id: "negocio", texto: "Negocio", icono: "resumen", pregunta: "Cuánto vendiste y cuánto costó conseguirlo." },
+  { id: "resumen", texto: "Resumen", icono: "resumen", pregunta: "Cómo le está yendo a tu cuenta." },
   {
     id: "calendario",
     texto: "Calendario",
     icono: "historias",
-    pregunta: "Que se publico y cuando. La cadencia real, no la planificada.",
+    pregunta: "Todo lo que publicaste, día por día.",
   },
   { id: "piezas", texto: "Piezas", icono: "piezas", pregunta: "Que funciono de verdad, ordenable y filtrable." },
   {
@@ -78,7 +80,6 @@ export default function App() {
   if (!s.sesion) return <Login s={s} />;
 
   const actual = SECCIONES.find((x) => x.id === seccion)!;
-  const rolActual = ROLES.find((r) => r.id === rol)!;
 
   const cambiarRol = (r: Rol) => {
     setRol(r);
@@ -114,7 +115,6 @@ export default function App() {
               </button>
             ))}
           </div>
-          <p className="rol-nota">{rolActual.nota}</p>
 
           <div className="usuario-pie">
             <span>{s.sesion.user.email}</span>
@@ -162,6 +162,8 @@ export default function App() {
                 return <Audiencia d={d} />;
               case "anuncios":
                 return <Anuncios d={d} />;
+              case "negocio":
+                return <Negocio d={d} />;
               case "mesa":
                 return <Mesa key={s.sesion?.user.id} d={d} jwt={jwt} />;
             }

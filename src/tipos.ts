@@ -93,6 +93,11 @@ export interface StatsPilar {
  *  alcance: el calendario dice que se publico, no que rindio. */
 export interface FilaCalendario {
   alcance?: Numerico;
+  vistas?: Numerico;
+  guardados?: Numerico;
+  likes?: Numerico;
+  comentarios?: Numerico;
+  compartidos?: Numerico;
   id: string;
   fecha: string;
   permalink: string | null;
@@ -142,14 +147,70 @@ export interface FilaCampana {
   ctr_mediano: Numerico;
 }
 
+/** Un periodo (mes o semana) del tablero de negocio. `null` = la fuente no
+ *  cubria ese periodo, no cero. Tasas en porcentaje; ROAS como multiplo. */
+export interface PeriodoNegocio {
+  inicio: string;
+  fin: string;
+  en_curso: boolean;
+  gasto_clp: Numerico;
+  gasto_usd: Numerico;
+  gasto_por_tipo: { tipo: string; gasto_clp: number }[];
+  conversaciones: Numerico;
+  conv_reales: Numerico;
+  registros: Numerico;
+  leads: Numerico;
+  agendas: Numerico;
+  llamadas: Numerico;
+  llamadas_con_resultado: Numerico;
+  asistieron: Numerico;
+  ventas: Numerico;
+  ingresos_usd: Numerico;
+  cerradas_ghl: Numerico;
+  show_rate: Numerico;
+  close_rate: Numerico;
+  costo_conversacion_usd: Numerico;
+  costo_agenda_usd: Numerico;
+  cac_usd: Numerico;
+  roas_total: Numerico;
+  roas_anuncio: Numerico;
+}
+
+export interface CoberturaFuente { desde: string; hasta: string; cargado_en: string; nota: string | null }
+
+export interface Negocio {
+  meta_mensual_usd: number;
+  hoy: string;
+  cobertura: Record<"meta" | "ghl" | "setter" | "dolar", CoberturaFuente | null>;
+  dolar: { mes: string; clp_por_usd: Numerico; fuente: string }[];
+  meses: PeriodoNegocio[];
+  semanas: PeriodoNegocio[];
+  origen_agendas: { nombre: string; n: number }[];
+  fuente_agendas: { nombre: string; n: number }[];
+  fuente_leads: { nombre: string; n: number }[];
+  etapas: { nombre: string; n: number }[];
+  fuente_llamadas: { nombre: string; n: number }[];
+  conciliacion: {
+    prospecto: string; ghl_etapa: string | null; ghl_fecha: string | null; ghl_valor: Numerico;
+    setter_resultado: string | null; setter_asistio: string | null; setter_monto_usd: Numerico; estado: string; ok: boolean;
+  }[];
+  llamadas: {
+    fecha: string; prospecto: string; fuente: string | null; asistio: string | null; nota: Numerico;
+    resultado: string | null; plan: string | null; monto_usd: Numerico; objecion: string | null; seguimiento: string | null;
+  }[];
+  agendas_recientes: { creado: string; nombre: string | null; fuente_ghl: string | null; origen: string; etapa: string | null }[];
+}
+
 export interface Analisis {
   generado: string;
+  negocio?: Negocio;
   cuenta: {
     username: string | null;
     nombre: string | null;
     followers_count: Numerico;
     media_count: Numerico;
     foto: string | null;
+    seguidores_historial?: { fecha: string; seguidores: number }[];
   };
   snapshot: string;
   piso_alcance: number;

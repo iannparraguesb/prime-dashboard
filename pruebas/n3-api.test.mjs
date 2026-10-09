@@ -39,3 +39,10 @@ test('lector no modifica competidores y las respuestas no se cachean públicamen
  const r=await pedir('/api/competidores',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({username:'audit_non_mutating'})});assert.equal(r.status,403);
  const health=await pedir('/api/salud');assert.match(health.headers.get('cache-control'),/no-store/);assert.equal(health.headers.get('access-control-allow-origin'),null);
 });
+test('negocio: el rol lectura no ve ingresos ni prospectos, ni por API ni por PostgREST',async()=>{
+ const r=await pedir('/api/analisis?seccion=negocio');assert.equal(r.status,403);const d=await r.json();assert.ok(!d.negocio);
+ for(const t of ['negocio_llamada','negocio_agenda','negocio_gasto_diario','negocio_lead']){
+  const q=await leerRest(`${t}?select=*&limit=1`);assert.equal(q.estado,200,`${t}: ${q.texto?.slice(0,200)}`);assert.deepEqual(q.cuerpo,[],`${t} visible para lectura`);
+  const a=await leerRest(`${t}?select=*&limit=1`,{sinAuth:true});assert.notEqual(a.estado,200,`${t} visible para anon`);
+ }
+});

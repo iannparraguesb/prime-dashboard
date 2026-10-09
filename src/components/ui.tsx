@@ -130,3 +130,28 @@ export function Barra({ partes }: { partes: { valor: number; color: string; nomb
     </div>
   );
 }
+
+/** Variacion contra el periodo anterior, como la muestra Instagram. Sin base
+ *  comparable no se inventa un porcentaje: no se muestra nada. */
+export function Delta({ actual, previo, texto = "vs. periodo anterior" }: { actual: Numerico | undefined; previo: Numerico | undefined; texto?: string }) {
+  if (actual === null || actual === undefined || previo === null || previo === undefined || previo === 0) return null;
+  const v = ((actual - previo) / Math.abs(previo)) * 100;
+  const tono = Math.abs(v) < 0.5 ? "igual" : v > 0 ? "sube" : "baja";
+  return (
+    <span className="delta" data-tono={tono}>
+      {tono === "igual" ? "= " : tono === "sube" ? "↑ " : "↓ "}
+      {Math.abs(v).toLocaleString(ES, { maximumFractionDigits: 0 })}% <span>{texto}</span>
+    </span>
+  );
+}
+
+/** "Hace 2 dias". Para saber de un vistazo si lo que se ve esta al dia. */
+export function haceCuanto(iso: string | null | undefined): string {
+  if (!iso) return "sin datos";
+  const ms = Date.now() - new Date(iso.length === 10 ? `${iso}T12:00:00` : iso).getTime();
+  const h = Math.floor(ms / 3_600_000);
+  if (h < 1) return "hace un momento";
+  if (h < 24) return `hace ${h} h`;
+  const d = Math.floor(h / 24);
+  return d === 1 ? "ayer" : `hace ${d} días`;
+}

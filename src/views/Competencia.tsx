@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { SinDatosSeccion } from "../components/states";
-import { Base, Nota, Badge, num, pct, compacto, fechaCorta, NADA } from "../components/ui";
+import { Badge, num, compacto, fechaCorta, NADA } from "../components/ui";
 import { Icono } from "../components/icons";
 import { ordenarCuentas, resumirCuenta } from "../lib/competencia";
 import type { Analisis, PiezaCompetencia } from "../tipos";
+import { guardarSugerencia, tema, type FormatoIdea } from "../lib/ideas";
 
 type Periodo = 30 | 90 | 365;
 
@@ -99,8 +100,7 @@ export function Competencia({ d, jwt }: { d: Analisis; jwt: string | null }) {
       else {
         setMsg({
           tipo: "ok",
-          texto: `@${cuerpo.competidor?.username} agregada. Queda en cola: el análisis corre con ` +
-            `el servicio de captura`,
+          texto: `@${cuerpo.competidor?.username} agregada. Sus publicaciones aparecen mañana.`,
         });
         setEntrada("");
         await cargar();
@@ -129,6 +129,10 @@ export function Competencia({ d, jwt }: { d: Analisis; jwt: string | null }) {
     } catch(e) { setMsg({tipo:"error",texto:e instanceof Error ? e.message : "No se pudo actualizar."}); }
   };
 
+  const [formato, setFormato] = useState<string | null>(null);
+  const [orden, setOrden] = useState<"funciono" | "reciente" | "likes">("funciono");
+  const [guardadas, setGuardadas] = useState<Set<string>>(new Set());
+
   const cuentas = useMemo(() => {
     const hoy = d.snapshot ? new Date(`${d.snapshot}T12:00:00Z`) : new Date();
     const filas = Object.entries(d.competencia?.cuentas ?? {}).map(([username, datos]) => ({
@@ -138,15 +142,44 @@ export function Competencia({ d, jwt }: { d: Analisis; jwt: string | null }) {
     }));
     return ordenarCuentas(filas);
   }, [d.competencia?.cuentas, d.snapshot, periodo]);
-  const medianas = cuentas.map((x) => x.resumen.mediana).filter((x): x is number => x !== null).sort((a, b) => a - b);
-  const medianaMercado = medianas.length
-    ? medianas.length % 2
-      ? medianas[Math.floor(medianas.length / 2)]
-      : (medianas[medianas.length / 2 - 1] + medianas[medianas.length / 2]) / 2
-    : null;
-  const piezasVisibles = cuentaActiva
-    ? cuentas.find((x) => x.username === cuentaActiva)?.datos.piezas ?? []
-    : [];
+
+  // Biblioteca: todas las piezas de la ventana, con cuanto rindio cada una
+  // contra el promedio de SU cuenta (comparar contra otra cuenta mide tamaño).
+  const biblioteca = useMemo(() => {
+    const desde = Date.now() - periodo * 86_400_000;
+    return cuentas
+      .filter((c) => !cuentaActiva || c.username === cuentaActiva)
+      .flatMap((c) => (c.datos.piezas ?? []).map((p) => ({
+        ...p,
+        cuenta: c.username,
+        ratio: p.interaccion_sobre_seguidores_pct !== null && c.datos.interaccion_mediana_pct
+          ? p.interaccion_sobre_seguidores_pct / c.datos.interaccion_mediana_pct : null,
+      })))
+      .filter((p) => Date.parse(`${p.fecha}T12:00:00`) >= desde && (!formato || p.formato === formato))
+      .sort((a, b) =>
+        orden === "reciente" ? b.fecha.localeCompare(a.fecha)
+          : orden === "likes" ? (b.likes ?? -1) - (a.likes ?? -1)
+            : (b.ratio ?? -1) - (a.ratio ?? -1));
+  }, [cuentas, cuentaActiva, periodo, formato, orden]);
+
+  const guardarIdea = async (p: (typeof biblioteca)[number]) => {
+    const f = ({ REEL: "reel", CARRUSEL: "carrusel" } as Record<string, FormatoIdea>)[p.formato ?? ""] ?? "post";
+    setMsg(null);
+    try {
+      await guardarSugerencia(jwt, {
+        clave: `competencia:${f}:${p.id}`, formato: f, origen: "competencia",
+        titulo: `Tu versión de «${tema(p.primera_linea) || "esta publicación"}»`, hook: "Ponte a pensar en esto…",
+        motivo: p.ratio ? `A @${p.cuenta} le funcionó ${p.ratio.toLocaleString("es-CL", { maximumFractionDigits: 1 })}x más que su promedio.` : `Publicación de @${p.cuenta}.`,
+        referencia_url: p.permalink, referencia_thumb: p.thumb, referencia_cuenta: p.cuenta,
+      });
+      setGuardadas((prev) => new Set(prev).add(p.id));
+    } catch (e) {
+      const texto = e instanceof Error ? e.message : "No se pudo guardar.";
+      if (texto.includes("ya existe")) setGuardadas((prev) => new Set(prev).add(p.id));
+      else setMsg({ tipo: "error", texto });
+    }
+  };
+
   const filas = lista?.filas ?? [];
   const tope = lista?.tope ?? 5;
   const activos = lista?.activos ?? 0;
@@ -154,65 +187,73 @@ export function Competencia({ d, jwt }: { d: Analisis; jwt: string | null }) {
 
   return (
     <div className="lista" style={{ gap: "var(--e5)" }}>
-      <section className="comp-hero card">
-        <div>
-          <span className="kpi-lbl">Radar competitivo</span>
-          <h2>Compara señales públicas, sin inventar métricas privadas</h2>
-          <p>Instagram entrega likes, comentarios y seguidores de cuentas Business/Creator públicas. El panel normaliza esas señales como interacción sobre seguidores.</p>
-        </div>
-        <label className="filtro-grupo">
-          <span className="filtro-lbl">Ventana comparable</span>
-          <select className="control" value={periodo} onChange={(e) => setPeriodo(Number(e.target.value) as Periodo)}>
-            <option value={30}>Últimos 30 días</option>
-            <option value={90}>Últimos 90 días</option>
-            <option value={365}>Últimos 12 meses</option>
-          </select>
-        </label>
-      </section>
-
-      <div className="kpis">
-        <div className="card kpi"><div className="kpi-lbl"><Icono nombre="competencia" size={13} /> Cuentas activas</div><div className="kpi-val num">{num(cuentas.length)}</div><div className="kpi-pie">{num(activos)} de {num(tope)} cupos usados</div></div>
-        <div className="card kpi"><div className="kpi-lbl"><Icono nombre="alcance" size={13} /> Mediana del mercado</div><div className="kpi-val num">{pct(medianaMercado, 3)}</div><div className="kpi-pie">interacción / seguidores en {periodo} días</div></div>
-        <div className="card kpi"><div className="kpi-lbl"><Icono nombre="piezas" size={13} /> Piezas medidas</div><div className="kpi-val num">{num(cuentas.reduce((s, x) => s + x.resumen.medidas, 0))}</div><div className="kpi-pie">solo publicaciones con señal disponible</div></div>
-        <div className="card kpi"><div className="kpi-lbl"><Icono nombre="reloj" size={13} /> Mayor cadencia</div><div className="kpi-val num">{cuentas.length ? `${cuentas.reduce((m, x) => Math.max(m, x.resumen.porSemana ?? 0), 0).toLocaleString("es-CL", { maximumFractionDigits: 1 })}/sem` : NADA}</div><div className="kpi-pie">ritmo observado en la ventana</div></div>
+      <div className="comp-cuentas">
+        {cuentas.map(({ username, datos, resumen }) => (
+          <article className="card comp-mini" key={username} data-activa={cuentaActiva === username || undefined}>
+            <button className="comp-mini-sel" onClick={() => setCuentaActiva(cuentaActiva === username ? null : username)} aria-pressed={cuentaActiva === username}>
+              <strong>@{username}</strong>
+              <span>{compacto(datos.seguidores ?? null)} seguidores · {resumen.porSemana == null ? NADA : `${resumen.porSemana.toLocaleString("es-CL")} posts/sem`}</span>
+            </button>
+            <a className="comp-mini-ads" href={`https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country=ALL&q=${encodeURIComponent(username)}&search_type=keyword_unordered`} target="_blank" rel="noreferrer">
+              Ver sus anuncios activos <Icono nombre="externo" size={11} />
+            </a>
+          </article>
+        ))}
       </div>
 
-      {cuentas.length ? (
-        <section>
-          <div className="comp-seccion-cab"><div><span className="kpi-lbl">Benchmark</span><h2>Quién está ganando atención</h2></div><Base>{num(cuentas.length)} cuentas · ordenadas por interacción mediana</Base></div>
-          <div className="comp-comparativa">
-            {cuentas.map(({ username, datos, resumen }, i) => {
-              const max = Math.max(...cuentas.map((x) => x.resumen.mediana ?? 0), 0.0001);
-              return (
-                <article className="card comp-cuenta" key={username} data-activa={cuentaActiva === username || undefined}>
-                  <div className="comp-cuenta-top"><span className="comp-pos">#{i + 1}</span><Badge tono={i === 0 ? "oro" : undefined}>{resumen.publicadas} piezas / {periodo}d</Badge></div>
-                  <a className="comp-usuario" href={`https://instagram.com/${username}`} target="_blank" rel="noreferrer">@{username}</a>
-                  <div className="comp-seguidores">{compacto(datos.seguidores ?? null)} seguidores</div>
-                  <div className="comp-dato"><strong>{pct(resumen.mediana, 3)}</strong><span>interacción mediana</span></div>
-                  <div className="barra comp-barra"><span style={{ width: `${((resumen.mediana ?? 0) / max) * 100}%` }} /></div>
-                  <div className="comp-meta"><span>{resumen.porSemana == null ? NADA : `${resumen.porSemana.toLocaleString("es-CL")}/sem`}</span><span>{num(resumen.medidas)} medidas</span></div>
-                  <button className="btn comp-ver" onClick={() => setCuentaActiva(cuentaActiva === username ? null : username)}>{cuentaActiva === username ? "Ocultar piezas" : "Ver mejores piezas"}</button>
-                </article>
-              );
-            })}
-          </div>
-        </section>
-      ) : null}
+      <div className="card filtros comp-filtros">
+        <div className="chips" role="group" aria-label="Cuenta">
+          <button className="chip" aria-pressed={cuentaActiva === null} onClick={() => setCuentaActiva(null)}>Todas</button>
+          {cuentas.map((c) => <button key={c.username} className="chip" aria-pressed={cuentaActiva === c.username} onClick={() => setCuentaActiva(c.username)}>@{c.username}</button>)}
+        </div>
+        <div className="chips" role="group" aria-label="Formato">
+          {[[null, "Todo"], ["REEL", "Reels"], ["CARRUSEL", "Carruseles"], ["IMAGEN", "Fotos"]].map(([v, t]) => (
+            <button key={t} className="chip" aria-pressed={formato === v} onClick={() => setFormato(v)}>{t}</button>
+          ))}
+        </div>
+        <select className="control" value={periodo} onChange={(e) => setPeriodo(Number(e.target.value) as Periodo)} aria-label="Periodo">
+          <option value={30}>Últimos 30 días</option>
+          <option value={90}>Últimos 90 días</option>
+          <option value={365}>Último año</option>
+        </select>
+        <select className="control" value={orden} onChange={(e) => setOrden(e.target.value as typeof orden)} aria-label="Ordenar">
+          <option value="funciono">Lo que mejor les funcionó</option>
+          <option value="reciente">Más recientes</option>
+          <option value="likes">Más me gusta</option>
+        </select>
+      </div>
 
-      {cuentaActiva ? (
-        <section className="comp-explorador">
-          <div className="comp-seccion-cab"><div><span className="kpi-lbl">Contenido analizado</span><h2>@{cuentaActiva}</h2></div><button className="chip" onClick={() => setCuentaActiva(null)}>Cerrar</button></div>
-          <div className="comp-piezas-grid">
-            {[...piezasVisibles].sort((a, b) => (b.interaccion_sobre_seguidores_pct ?? -1) - (a.interaccion_sobre_seguidores_pct ?? -1)).slice(0, 12).map((p) => (
-              <a className="comp-pieza" href={p.permalink ?? undefined} target="_blank" rel="noreferrer" key={p.id}>
-                <div className="comp-pieza-media"><Miniatura pieza={p} /><Badge>{FORMATO[p.formato ?? ""] ?? p.formato ?? "Pieza"}</Badge></div>
-                <div className="comp-pieza-cuerpo"><p>{p.primera_linea || "Sin texto disponible"}</p><div className="comp-pieza-metricas"><span>♥ {compacto(p.likes)}</span><span>◌ {compacto(p.comentarios)}</span><strong>{pct(p.interaccion_sobre_seguidores_pct, 3)}</strong></div><Base>{fechaCorta(p.fecha)}</Base></div>
+      {msg?.tipo === "error" ? <div className="login-error" role="alert">{msg.texto}</div> : null}
+
+      {biblioteca.length ? (
+        <div className="top-grilla">
+          {biblioteca.slice(0, 60).map((p) => (
+            <article className="top-pieza comp-lib" key={p.id}>
+              <a className="top-media" href={p.permalink ?? undefined} target="_blank" rel="noreferrer">
+                <Miniatura pieza={p} />
+                {p.ratio !== null && p.ratio >= 1.5 ? <span className="top-rango">Le funcionó {p.ratio.toLocaleString("es-CL", { maximumFractionDigits: 1 })}x</span> : null}
+                <span className="top-formato">@{p.cuenta} · {FORMATO[p.formato ?? ""] ?? "Post"}</span>
               </a>
-            ))}
-          </div>
-        </section>
-      ) : null}
+              <div className="top-cuerpo">
+                <p>{p.primera_linea || "Sin texto"}</p>
+                <div className="top-mets">
+                  <span title="Me gusta"><Icono nombre="like" size={12} /> {compacto(p.likes)}</span>
+                  <span title="Comentarios"><Icono nombre="comentario" size={12} /> {compacto(p.comentarios)}</span>
+                  <small>{fechaCorta(p.fecha)}</small>
+                </div>
+                <button className="btn" disabled={guardadas.has(p.id)} onClick={() => void guardarIdea(p)}>
+                  {guardadas.has(p.id) ? "Guardada en tu banco" : "Guardar idea"}
+                </button>
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <div className="card" style={{ padding: "var(--e5)", color: "var(--texto-2)" }}>No hay publicaciones con estos filtros.</div>
+      )}
 
+      <details className="card comp-gestion">
+        <summary>Cuentas que sigues ({num(activos)} de {num(tope)})</summary>
       {/* ---------- alta ---------- */}
       <div className="card" style={{ padding: "var(--e4)" }}>
         <div className="comp-alta">
@@ -254,12 +295,7 @@ export function Competencia({ d, jwt }: { d: Analisis; jwt: string | null }) {
           </div>
         ) : null}
 
-        <Base>
-          Acepta la URL del perfil, el @usuario o el usuario pelado. La cuenta tiene que ser{" "}
-          <b>Business o Creator y pública</b> — con una cuenta personal o privada, Instagram no
-          devuelve nada y el estado queda en Error con la razón escrita. El tope de {num(tope)} lo
-          impone la base de datos, no esta pantalla.
-        </Base>
+        <p className="comp-ayuda">Pega el perfil o el @usuario. La cuenta tiene que ser pública y de empresa o creador.</p>
       </div>
 
       {/* ---------- estado de captura ---------- */}
@@ -270,7 +306,7 @@ export function Competencia({ d, jwt }: { d: Analisis; jwt: string | null }) {
       ) : !filas.length ? (
         <SinDatosSeccion
           titulo="Todavía no hay competidores"
-          porque="Agrega el primero arriba. Después corre `el servicio de captura` para que traiga su contenido."
+          porque="Agrega la primera cuenta arriba. Su contenido aparece al día siguiente."
         />
       ) : (
         <div className="tabla-caja">
@@ -327,7 +363,7 @@ export function Competencia({ d, jwt }: { d: Analisis; jwt: string | null }) {
         </div>
       )}
 
-      <Nota>{lista?.nota ?? d.competencia?.nota}</Nota>
+      </details>
 
       {/* La exploración visual de piezas vive arriba; esta tabla operativa se mantiene
           para diagnosticar cola, errores y activar/desactivar cuentas. */}

@@ -25,6 +25,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { HttpError, json, readBody, textField, uuid, rateLimit, reportError } from "./backend/security.mjs";
+import { sugerencias } from "./backend/ideas.mjs";
 
 const AQUI = path.dirname(fileURLToPath(import.meta.url));
 const RAIZ = path.resolve(AQUI, "..", "..");
@@ -103,7 +104,7 @@ const MAX_FILAS = 10000;
 /** Trae una tabla o vista completa, paginando por Range para no depender del
  *  limite de filas que tenga configurado el proyecto. */
 async function traer(recurso, consulta = "select=*", jwt = null) {
-  const orden = { cuenta:"id", cuenta_metrica:"cuenta_id,fecha_snapshot,fuente", pieza:"post_id", pieza_metrica:"post_id,fecha_snapshot,fuente", pieza_pilar:"post_id,pilar", config:"clave", v_pieza_ranking:"post_id", v_base_formato:"cuenta_id,formato", v_pilar_rendimiento:"pilar", v_efecto_palabra_clave:"pide_palabra_clave", audiencia_snapshot:"fecha_snapshot,corte,clave", historia:"historia_id", historia_metrica:"historia_id,fecha_snapshot", v_anuncio:"ad_id", v_campana:"campana,moneda", usuario:"id" };
+  const orden = { cuenta:"id", cuenta_metrica:"cuenta_id,fecha_snapshot,fuente", pieza:"post_id", pieza_metrica:"post_id,fecha_snapshot,fuente", pieza_pilar:"post_id,pilar", config:"clave", v_pieza_ranking:"post_id", v_base_formato:"cuenta_id,formato", v_pilar_rendimiento:"pilar", v_efecto_palabra_clave:"pide_palabra_clave", audiencia_snapshot:"fecha_snapshot,corte,clave", historia:"historia_id", historia_metrica:"historia_id,fecha_snapshot", v_anuncio:"ad_id", v_campana:"campana,moneda", usuario:"id", negocio_gasto_diario:"fecha,campana_id", negocio_dolar:"mes", negocio_agenda:"id", negocio_lead:"id", negocio_llamada:"id", negocio_carga:"fuente" };
   if (!consulta.includes("order=") && orden[recurso]) consulta += `&order=${orden[recurso]}`;
   const filas = [];
   for (let desde = 0; desde < MAX_FILAS; desde += PAGINA) {
@@ -442,6 +443,7 @@ async function construirAnalisis(jwt, seccion = "completo") {
     const [filas, campanas] = await Promise.all([traer("v_anuncio", "select=*", jwt), traer("v_campana", "select=*", jwt)]);
     return { anuncios: construirAnuncios(filas, campanas) };
   }
+  if (seccion === "negocio") return await construirNegocio(jwt);
   if (seccion === "historias") {
     const [filas, metricas] = await Promise.all([traer("historia", "select=*&order=publicado_en.desc,historia_id.asc", jwt), traer("historia_metrica", "select=*&order=fecha_snapshot.desc,historia_id.asc", jwt)]);
     return { historias: construirHistorias(filas, metricas) };
@@ -493,12 +495,12 @@ async function construirAnalisis(jwt, seccion = "completo") {
     // Solo la cuenta propia: sin el filtro, la fila mas reciente puede ser de
     // un competidor y el KPI "Seguidores" del Resumen muestra los de otra
     // cuenta. Paso: mostro 751.269 de @therealbrianmark en vez de 106.345.
-    traer("cuenta_metrica", "select=*&cuenta_id=not.like.externa:*&order=fecha_snapshot.desc&limit=1", jwt),
+    traer("cuenta_metrica", "select=*&cuenta_id=not.like.externa:*&order=fecha_snapshot.desc&limit=90", jwt),
     traer("config", "select=clave,valor", jwt),
     si(necesita("piezas"), "pieza_metrica", "select=post_id,fecha_snapshot,fuente,interacciones_totales"),
     si(necesita("audiencia"), "audiencia_snapshot", "select=corte,clave,valor,fecha_snapshot&order=fecha_snapshot.desc"),
-    si(necesita("historias"), "historia", "select=*"),
-    si(necesita("historias"), "historia_metrica", "select=*&order=fecha_snapshot.desc"),
+    si(necesita("historias", "calendario", "resumen"), "historia", "select=*"),
+    si(necesita("historias", "calendario", "resumen"), "historia_metrica", "select=*&order=fecha_snapshot.desc"),
     si(necesita("competencia"), "cuenta", "select=id,username,es_propia"),
     si(necesita("competencia"), "pieza", "select=post_id,cuenta_id,permalink,fecha_publicacion,formato,primera_linea,thumb_path&cuenta_id=like.externa:*"),
     si(necesita("competencia"), "pieza_metrica", "select=post_id,likes,comentarios,fecha_snapshot&order=fecha_snapshot.desc"),
@@ -577,6 +579,11 @@ async function construirAnalisis(jwt, seccion = "completo") {
       thumb: p.thumb,
       primera_linea: p.primera_linea,
       alcance: p.alcance,
+      vistas: p.vistas,
+      guardados: p.guardados,
+      likes: p.likes,
+      comentarios: p.comentarios,
+      compartidos: p.compartidos,
       guardado_pct: p.guardado_pct,
       multiplicador: p.multiplicador,
       apto_ranking: aptos.has(p.id),
@@ -657,6 +664,10 @@ async function construirAnalisis(jwt, seccion = "completo") {
       followers_count: aNumero(ultima.seguidores),
       media_count: aNumero(ultima.publicaciones),
       foto: null,
+      // Una medicion por corrida de la ingesta, de la mas vieja a la mas nueva.
+      seguidores_historial: [...cuentaMetrica].reverse()
+        .filter((m) => aNumero(m.seguidores) !== null)
+        .map((m) => ({ fecha: m.fecha_snapshot, seguidores: aNumero(m.seguidores) })),
     },
     snapshot,
     piso_alcance: cfg.piso_alcance ?? 500,
@@ -864,6 +875,188 @@ function construirAnuncios(anuncios, campanas) {
 }
 
 /* --------------------------------------------------------------------------
+   Negocio — gasto, agendas, llamadas, ventas
+   Carga: tools/finanzas_a_supabase.py (workspace Prime club). Solo rol admin.
+
+   Tres fuentes con coberturas distintas. Un periodo fuera de la cobertura de
+   una fuente devuelve null para sus metricas, nunca 0: "el setter no anotaba"
+   no es "no hubo ventas".
+   -------------------------------------------------------------------------- */
+
+const META_MENSUAL_USD = 30000;
+const DIA_MS = 86_400_000;
+
+const isoDia = (d) => d.toISOString().slice(0, 10);
+const aFecha = (iso) => new Date(`${iso}T00:00:00Z`);
+const lunesDe = (iso) => { const d = aFecha(iso); return isoDia(new Date(d - ((d.getUTCDay() + 6) % 7) * DIA_MS)); };
+const mesDe = (iso) => `${iso.slice(0, 7)}-01`;
+const finDeMes = (iso) => { const d = aFecha(iso); return isoDia(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0))); };
+const sumar = (filas, f) => filas.reduce((s, x) => s + (aNumero(f(x)) ?? 0), 0);
+const dividir = (a, b, escala = 1, decimales = 2) =>
+  a === null || b === null || !b ? null : redondear((a / b) * escala, decimales);
+const normalizarNombre = (t) => String(t ?? "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").split(/\s+/).filter(Boolean).join(" ");
+
+async function construirNegocio(jwt) {
+  const [gasto, dolar, agendas, leads, llamadas, cargas] = await Promise.all([
+    traer("negocio_gasto_diario", "select=*", jwt),
+    traer("negocio_dolar", "select=*", jwt),
+    traer("negocio_agenda", "select=*", jwt),
+    traer("negocio_lead", "select=id,creado,fuente,origen", jwt),
+    traer("negocio_llamada", "select=*", jwt),
+    traer("negocio_carga", "select=*", jwt),
+  ]);
+  if (!gasto.length && !agendas.length && !llamadas.length) {
+    return {
+      error: "Todavia no se cargaron datos de negocio.",
+      comando: "python3 tools/finanzas_a_supabase.py",
+      detalle: "Se corre desde el workspace Prime club, con la migracion 0011_negocio.sql aplicada.",
+    };
+  }
+
+  const cob = Object.fromEntries(cargas.map((c) => [c.fuente, c]));
+  const tc = Object.fromEntries(dolar.map((d) => [d.mes, aNumero(d.clp_por_usd)]));
+  const hoy = isoDia(new Date());
+  // Cubre si el periodo toca el rango de la fuente.
+  const cubre = (fuente, inicio, fin) => {
+    const c = cob[fuente];
+    return Boolean(c && inicio <= c.cubre_hasta && fin >= c.cubre_desde);
+  };
+
+  const periodo = (inicio, fin) => {
+    const en = (iso) => iso >= inicio && iso <= fin;
+    const g = gasto.filter((x) => en(x.fecha));
+    const conMeta = cubre("meta", inicio, fin);
+    const gastoClp = conMeta ? sumar(g, (x) => x.gasto) : null;
+    // Si a algun dia le falta el dolar del mes, el total en USD no existe.
+    const sinTc = g.some((x) => !tc[mesDe(x.fecha)]);
+    const gastoUsd = conMeta && !sinTc ? redondear(g.reduce((s, x) => s + aNumero(x.gasto) / tc[mesDe(x.fecha)], 0), 2) : null;
+
+    const conGhl = cubre("ghl", inicio, fin);
+    const nAgendas = conGhl ? agendas.filter((a) => en(a.creado)).length : null;
+    const nLeads = conGhl ? leads.filter((l) => en(l.creado)).length : null;
+    const cerradasGhl = conGhl ? agendas.filter((a) => a.etapa === "Cerrada" && en(a.cambio_etapa)).length : null;
+
+    const conSetter = cubre("setter", inicio, fin);
+    const ll = llamadas.filter((x) => en(x.fecha));
+    const nLlamadas = conSetter ? ll.length : null;
+    const asistieron = conSetter ? ll.filter((x) => x.asistio === "Sí").length : null;
+    const conResultado = conSetter ? ll.filter((x) => x.asistio === "Sí" || x.asistio === "No").length : null;
+    const ventas = conSetter ? ll.filter((x) => x.resultado === "Cerró").length : null;
+    const ingresos = conSetter ? sumar(ll.filter((x) => x.resultado === "Cerró"), (x) => x.monto_usd) : null;
+    const ingresosAnuncio = conSetter ? sumar(ll.filter((x) => x.resultado === "Cerró" && x.fuente === "Anuncio"), (x) => x.monto_usd) : null;
+
+    const porTipo = {};
+    for (const x of g) porTipo[x.tipo] = (porTipo[x.tipo] ?? 0) + (aNumero(x.gasto) ?? 0);
+
+    return {
+      inicio,
+      fin,
+      en_curso: fin >= hoy,
+      gasto_clp: gastoClp,
+      gasto_usd: gastoUsd,
+      gasto_por_tipo: conMeta ? Object.entries(porTipo).map(([tipo, clp]) => ({ tipo, gasto_clp: clp })).sort((a, b) => b.gasto_clp - a.gasto_clp) : [],
+      conversaciones: conMeta ? sumar(g, (x) => x.conversaciones) : null,
+      conv_reales: conMeta ? sumar(g, (x) => x.conv_reales) : null,
+      registros: conMeta ? sumar(g, (x) => x.registros) : null,
+      leads: nLeads,
+      agendas: nAgendas,
+      llamadas: nLlamadas,
+      llamadas_con_resultado: conResultado,
+      asistieron,
+      ventas,
+      ingresos_usd: ingresos,
+      cerradas_ghl: cerradasGhl,
+      // Tasas en porcentaje (regla 1). Show rate sobre llamadas con resultado
+      // anotado: una llamada de manana sin anotar no es una inasistencia.
+      show_rate: dividir(asistieron, conResultado, 100, 1),
+      close_rate: dividir(ventas, asistieron, 100, 1),
+      costo_conversacion_usd: dividir(gastoUsd, conMeta ? sumar(g, (x) => x.conversaciones) : null),
+      costo_agenda_usd: dividir(gastoUsd, nAgendas),
+      cac_usd: dividir(gastoUsd, ventas),
+      roas_total: ingresos === null ? null : dividir(ingresos, gastoUsd),
+      roas_anuncio: ingresosAnuncio === null ? null : dividir(ingresosAnuncio, gastoUsd),
+    };
+  };
+
+  const fechas = [...gasto.map((x) => x.fecha), ...agendas.map((x) => x.creado), ...llamadas.map((x) => x.fecha)].filter((f) => f <= hoy).sort();
+  const primero = fechas[0];
+  const ultimo = fechas[fechas.length - 1];
+  const meses = [];
+  for (let m = mesDe(primero); m <= ultimo; m = isoDia(new Date(aFecha(finDeMes(m)).getTime() + DIA_MS))) meses.push(periodo(m, finDeMes(m)));
+  const semanas = [];
+  for (let s = lunesDe(primero); s <= ultimo; s = isoDia(new Date(aFecha(s).getTime() + 7 * DIA_MS))) {
+    semanas.push(periodo(s, isoDia(new Date(aFecha(s).getTime() + 6 * DIA_MS))));
+  }
+
+  // Conciliacion: GHL (etapa Cerrada) contra el setter (resultado Cerro).
+  const ghlCerradas = new Map(agendas.filter((a) => a.etapa === "Cerrada").map((a) => [normalizarNombre(a.nombre), a]));
+  const setterPorNombre = new Map(llamadas.map((l) => [normalizarNombre(l.prospecto), l]));
+  const claves = new Set([...ghlCerradas.keys(), ...llamadas.filter((l) => l.resultado === "Cerró").map((l) => normalizarNombre(l.prospecto))]);
+  const conciliacion = [...claves].sort().map((k) => {
+    const g = ghlCerradas.get(k);
+    const s = setterPorNombre.get(k);
+    const valor = aNumero(g?.valor);
+    const monto = aNumero(s?.monto_usd);
+    let estado;
+    let ok = false;
+    if (g && s?.resultado === "Cerró") {
+      ok = !(valor && monto && Math.abs(valor - monto) > 1);
+      estado = ok ? "Venta en ambas fuentes" : "Monto distinto: corregir el valor en GHL";
+    } else if (g && s) {
+      estado = `GHL dice Cerrada; el setter anoto "${s.resultado ?? "sin resultado"}" y asistio "${s.asistio ?? "sin anotar"}"`;
+    } else if (g) {
+      estado = "Solo en GHL: falta en el registro del setter";
+    } else {
+      estado = "Solo en el setter: mover la tarjeta a Cerrada en GHL";
+    }
+    return {
+      prospecto: g?.nombre ?? s?.prospecto ?? "",
+      ghl_etapa: g?.etapa ?? null,
+      ghl_fecha: g?.cambio_etapa ?? null,
+      ghl_valor: valor,
+      setter_resultado: s?.resultado ?? null,
+      setter_asistio: s?.asistio ?? null,
+      setter_monto_usd: monto,
+      estado,
+      ok,
+    };
+  });
+
+  const contar = (filas, clave) => {
+    const c = {};
+    for (const f of filas) { const k = f[clave] || "Sin dato"; c[k] = (c[k] ?? 0) + 1; }
+    return Object.entries(c).map(([nombre, n]) => ({ nombre, n })).sort((a, b) => b.n - a.n);
+  };
+
+  return {
+    negocio: {
+      meta_mensual_usd: META_MENSUAL_USD,
+      hoy,
+      cobertura: Object.fromEntries(["meta", "ghl", "setter", "dolar"].map((f) => [f, cob[f] ? {
+        desde: cob[f].cubre_desde, hasta: cob[f].cubre_hasta, cargado_en: cob[f].cargado_en, nota: cob[f].nota ?? null,
+      } : null])),
+      dolar: dolar.map((d) => ({ mes: d.mes, clp_por_usd: aNumero(d.clp_por_usd), fuente: d.fuente })).sort((a, b) => a.mes.localeCompare(b.mes)),
+      meses,
+      semanas,
+      origen_agendas: contar(agendas, "origen"),
+      fuente_agendas: contar(agendas, "fuente_ghl"),
+      fuente_leads: contar(leads, "fuente"),
+      etapas: contar(agendas, "etapa"),
+      fuente_llamadas: contar(llamadas, "fuente"),
+      conciliacion,
+      llamadas: [...llamadas].sort((a, b) => b.fecha.localeCompare(a.fecha) || a.prospecto.localeCompare(b.prospecto)).map((l) => ({
+        fecha: l.fecha, prospecto: l.prospecto, fuente: l.fuente ?? null, asistio: l.asistio ?? null,
+        nota: aNumero(l.nota), resultado: l.resultado ?? null, plan: l.plan ?? null, monto_usd: aNumero(l.monto_usd),
+        objecion: l.objecion ?? null, seguimiento: l.seguimiento ?? null,
+      })),
+      agendas_recientes: [...agendas].sort((a, b) => b.creado.localeCompare(a.creado)).slice(0, 40).map((a) => ({
+        creado: a.creado, nombre: a.nombre ?? null, fuente_ghl: a.fuente_ghl ?? null, origen: a.origen, etapa: a.etapa ?? null,
+      })),
+    },
+  };
+}
+
+/* --------------------------------------------------------------------------
    Competidores — escritura
    El JWT se reenvia tal cual: el RLS decide si este usuario puede escribir, y
    el trigger de la base impone el tope de 5. Este servidor NO valida permisos
@@ -985,7 +1178,7 @@ async function identidad(req) {
   return { jwt, id: user.id, rol: miembros[0].rol };
 }
 
-const SECCIONES = new Set(["completo", "resumen", "calendario", "piezas", "palabra-clave", "historias", "competencia", "audiencia", "anuncios", "mesa"]);
+const SECCIONES = new Set(["completo", "resumen", "calendario", "piezas", "palabra-clave", "historias", "competencia", "audiencia", "anuncios", "mesa", "negocio"]);
 
 async function atender(req, res) {
   const url = new URL(req.url, "http://localhost");
@@ -995,6 +1188,8 @@ async function atender(req, res) {
     "/api/analisis": ["GET"], "/api/salud": ["GET"], "/api/catalogo": ["GET"],
     "/api/competidores": ["GET", "POST", "PATCH", "DELETE"],
     "/api/plan": ["GET", "POST", "PATCH", "DELETE"],
+    "/api/ideas": ["GET", "POST", "PATCH"],
+    "/api/ideas/sugerencias": ["GET"],
   };
   const permitidos = methods[url.pathname];
   if (!permitidos) throw new HttpError(404, "La ruta no existe.");
@@ -1011,11 +1206,25 @@ async function atender(req, res) {
   if (url.pathname === "/api/analisis") {
     const seccion = url.searchParams.get("seccion") || "completo";
     if (!SECCIONES.has(seccion)) throw new HttpError(400, "La sección no es válida.");
+    // Ingresos y nombres de prospectos: solo admin. RLS ya lo impide; esto
+    // evita que otro rol reciba un panel vacio que parezca "cero ventas".
+    if (seccion === "negocio" && user.rol !== "admin") throw new HttpError(403, "Esta sección es solo para administración.");
     const d = await construirAnalisis(jwt, seccion);
+    if (seccion === "negocio") return json(res, d);
     if (!d.error && seccion !== "completo") {
       if (seccion === "resumen") {
-        d.rankings.todas = d.rankings.todas.map(p => ({ fecha: p.fecha, guardado_pct: p.guardado_pct }));
-        d.calendario = d.calendario.map(p => ({ fecha: p.fecha, alcance: p.alcance }));
+        // Detalle completo solo de los ultimos 90 dias (mejores publicaciones);
+        // del resto, lo justo para comparar contra el periodo anterior.
+        const corte = new Date(Date.now() - 90 * 86_400_000).toISOString().slice(0, 10);
+        const corteHist = new Date(Date.now() - 180 * 86_400_000).toISOString().slice(0, 10);
+        d.rankings.todas = [];
+        d.calendario = d.calendario.filter(p => p.fecha >= corteHist).map(p => p.fecha >= corte
+          ? { id: p.id, fecha: p.fecha, permalink: p.permalink, formato: p.formato, thumb: p.thumb,
+              primera_linea: p.primera_linea.slice(0, 90), alcance: p.alcance, guardados: p.guardados,
+              likes: p.likes, comentarios: p.comentarios, compartidos: p.compartidos }
+          : { fecha: p.fecha, alcance: p.alcance, guardados: p.guardados });
+        d.historias.filas = d.historias.filas.filter(h => (h.hora ?? "") >= corteHist)
+          .map(h => ({ id: h.id, hora: h.hora, alcance: h.alcance }));
         d.mesa.propuestas = d.mesa.propuestas.slice(0,1);
         delete d.por_pilar; delete d.correlaciones;
       }
@@ -1028,6 +1237,8 @@ async function atender(req, res) {
   }
   if (url.pathname === "/api/catalogo") return json(res, await catalogo(url.searchParams, jwt));
   if (url.pathname === "/api/plan") return await plan(req, res, user);
+  if (url.pathname === "/api/ideas/sugerencias") return json(res, await listarSugerencias(url.searchParams, jwt));
+  if (url.pathname === "/api/ideas") return await ideas(req, res, user);
   if (req.method === "GET") return json(res, await listarCompetidores(jwt));
   if (user.rol === "lectura") throw new HttpError(403, "Tu acceso es de lectura.");
   const cuerpo = await readBody(req);
@@ -1122,4 +1333,82 @@ async function plan(req, res, {jwt, id}) {
   comprobarEscritura(r);
   if (!r.datos?.length) throw new HttpError(404, 'No se encontró la tarea.');
   return json(res, {ok:true,tarea:r.datos[0]}, nuevo ? 201 : 200);
+}
+
+/* --------------------------------------------------------------------------
+   Banco de ideas. RLS decide: todos leen, solo admin escribe. El chequeo de rol
+   aca es para responder un mensaje claro en vez de un error de base.
+   -------------------------------------------------------------------------- */
+
+const FORMATOS_IDEA = ["historia", "carrusel", "reel", "post"];
+const ESTADOS_IDEA = ["idea", "en_produccion", "lista", "publicada", "descartada"];
+const ORIGENES_IDEA = ["manual", "sugerida", "propia", "competencia"];
+
+function opcion(v, validos, campo) {
+  if (!validos.includes(v)) throw new HttpError(400, `${campo} no es válido.`);
+  return v;
+}
+
+function urlHttps(v, campo) {
+  if (v === undefined || v === null || v === "") return null;
+  const t = textField(v, campo, 1000);
+  if (!/^https:\/\//.test(t)) throw new HttpError(400, `${campo} no es válido.`);
+  return t;
+}
+
+async function ideas(req, res, { jwt, rol }) {
+  if (req.method === "GET") {
+    const r = await rest("idea?select=*&estado=neq.descartada&order=actualizado_en.desc&limit=500", { jwt });
+    comprobarEscritura(r);
+    return json(res, { filas: r.datos ?? [], puede_editar: rol === "admin" });
+  }
+  if (rol !== "admin") throw new HttpError(403, "Solo Leo e Iann pueden editar el banco de ideas.");
+  const b = await readBody(req);
+  const cambio = {};
+  if (req.method === "POST" || b.titulo !== undefined) cambio.titulo = textField(b.titulo, "Título", 200);
+  if (req.method === "POST" || b.formato !== undefined) cambio.formato = opcion(b.formato, FORMATOS_IDEA, "El formato");
+  if (b.estado !== undefined) cambio.estado = opcion(b.estado, ESTADOS_IDEA, "El estado");
+  if (b.hook !== undefined) cambio.hook = textField(b.hook, "Hook", 300, true);
+  if (b.nota !== undefined) cambio.nota = textField(b.nota, "Nota", 3000, true);
+  if (b.fecha_plan !== undefined) {
+    if (b.fecha_plan !== null && !/^\d{4}-\d{2}-\d{2}$/.test(b.fecha_plan)) throw new HttpError(400, "Fecha inválida.");
+    cambio.fecha_plan = b.fecha_plan;
+  }
+  if (req.method === "POST") {
+    cambio.origen = b.origen === undefined ? "manual" : opcion(b.origen, ORIGENES_IDEA, "El origen");
+    cambio.motivo = textField(b.motivo, "Motivo", 500, true);
+    cambio.clave_sugerencia = textField(b.clave_sugerencia, "Clave", 160, true);
+    cambio.referencia_url = urlHttps(b.referencia_url, "El enlace de referencia");
+    cambio.referencia_thumb = urlHttps(b.referencia_thumb, "La miniatura");
+    cambio.referencia_cuenta = textField(b.referencia_cuenta, "Cuenta", 60, true);
+  }
+  const nuevo = req.method === "POST";
+  const r = await rest(nuevo ? "idea" : `idea?id=eq.${uuid(b.id)}`, {
+    jwt, metodo: nuevo ? "POST" : "PATCH", prefer: "return=representation", cuerpo: cambio,
+  });
+  comprobarEscritura(r);
+  if (!r.datos?.length) throw new HttpError(404, "No se encontró la idea.");
+  return json(res, { ok: true, idea: r.datos[0] }, nuevo ? 201 : 200);
+}
+
+async function listarSugerencias(params, jwt) {
+  const formato = params.get("formato");
+  if (formato && !FORMATOS_IDEA.includes(formato)) throw new HttpError(400, "El formato no es válido.");
+  // "desde" = cuantas sugerencias sin guardar quedan en pantalla. Guardar o
+  // descartar las saca de la lista, asi que paginar por numero de pagina saltaria ideas.
+  const desde = Number(params.get("desde") ?? 0);
+  if (!Number.isInteger(desde) || desde < 0 || desde > 5000) throw new HttpError(400, "El parámetro desde no es válido.");
+  const [d, usadas] = await Promise.all([
+    construirAnalisis(jwt, "competencia"),
+    rest("idea?select=clave_sugerencia&clave_sugerencia=not.is.null&limit=5000", { jwt }),
+  ]);
+  if (d.error) return d;
+  comprobarEscritura(usadas);
+  return sugerencias({
+    piezas: d.rankings?.todas ?? [],
+    cuentas: d.competencia?.cuentas ?? {},
+    usadas: new Set((usadas.datos ?? []).map((x) => x.clave_sugerencia)),
+    formato,
+    desde,
+  });
 }
