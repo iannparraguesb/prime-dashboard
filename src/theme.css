@@ -1924,3 +1924,14 @@ a.idea-origen:hover { color: var(--acento-claro); }
 /* El numero se ajusta al ancho de SU tarjeta, no al de la ventana: con 5 tarjetas no se desborda. */
 .kpi { container-type: inline-size; }
 .kpi-val { font-size: clamp(26px, 17cqi, 46px); white-space: nowrap; }
+
+/* La barra superior se adapta al ancho real del contenido (no al de la
+   ventana): con el menu lateral abierto el espacio es menor de lo que parece. */
+.principal { container-type: inline-size; container-name: principal; }
+@container principal (max-width: 1180px) { .chip-fecha { display: none; } }
+@container principal (max-width: 1040px) { .barra-stat:nth-child(3) { display: none; } }
+@container principal (max-width: 880px) {
+  .barra-stats { display: none; }
+  .barra-sup { grid-template-columns: 1fr auto; }
+}
+@container principal (max-width: 560px) { .frescura-pill { display: none; } }
