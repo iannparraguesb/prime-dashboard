@@ -1,6 +1,35 @@
 # Conexión segura de Instagram para alumnos
 
-Estado: diseño e infraestructura Fase A listos; onboarding bloqueado hasta completar Fase B/C y cerrar S01–S03/S07.
+Estado (2026-10-09): **v1 implementada para piloto**. Migración 0013 aplicada en producción con paridad
+exacta del panel de Leo (0 diferencias en Resumen, Piezas, Palabra clave e Historias). Falta configurar la app
+de Meta y las variables de Vercel para habilitar el botón.
+
+## Implementación v1 (reemplaza Fase B/C)
+
+En vez de agregar `workspace_id` a todas las tablas, el aislamiento se resuelve por cuenta:
+
+- **Equipo** (filas en `usuario`): policies `lectura_*` con `es_autorizado()`, sin cambios. Ve todo.
+- **Alumno** (autenticado fuera de `usuario`): policies `alumno_lee` que solo SUMAN lectura sobre filas cuyo
+  `cuenta_id` está en `mis_cuentas_alumno()` (sus conexiones activas). No ve anuncios, negocio, ideas,
+  competencia ni otras cuentas. Desconectar corta el acceso.
+- `v_pilar_rendimiento` y `v_efecto_palabra_clave` ahora agrupan por `cuenta_id`.
+- El servidor consulta SIEMPRE una cuenta exacta (`cuenta_id=eq.`): la de Leo para el equipo, la propia para el
+  alumno. El alumno solo accede a resumen, calendario, piezas, historias, `/api/yo` y `/api/instagram/*`.
+
+| Pieza | Dónde |
+|---|---|
+| Migración | `supabase/migrations/0013_alumnos_instagram.sql` |
+| OAuth (state de un uso, token en Vault) | `backend/instagram.mjs` |
+| Pantalla "Mi Instagram" y regreso | `src/views/Instagram.tsx`, ruta `/conectar/instagram` |
+| Sincronización por alumno (cada hora) | `ingesta/tools/ig_alumnos.py`, paso en `sync-instagram.yml` |
+| Pruebas | `pruebas/alumnos-db.test.mjs` (13, PGlite), `pruebas/instagram.test.mjs` (9) |
+
+Variables de Vercel (solo Production, nunca `VITE_`): `IG_APP_ID`, `IG_APP_SECRET`,
+`IG_REDIRECT_URI=https://app.primeclubacademy.io/conectar/instagram`, `SUPABASE_SERVICE_KEY` (solo la usa
+`backend/instagram.mjs` para consumir el state y guardar la conexión).
+
+Pendiente antes de abrir a todos: App Review de Meta, política de privacidad y callback de borrado de datos,
+miniaturas en bucket privado (A-04), re-auditoría con dos alumnos reales.
 
 ## Objetivo
 

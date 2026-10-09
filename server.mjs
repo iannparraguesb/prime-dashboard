@@ -26,6 +26,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { HttpError, json, readBody, textField, uuid, rateLimit, reportError } from "./backend/security.mjs";
 import { sugerencias } from "./backend/ideas.mjs";
+import { rutaInstagram } from "./backend/instagram.mjs";
 
 const AQUI = path.dirname(fileURLToPath(import.meta.url));
 const RAIZ = path.resolve(AQUI, "..", "..");
@@ -430,7 +431,12 @@ function faltaConfig() {
   return null;
 }
 
-async function construirAnalisis(jwt, seccion = "completo") {
+/** `cuentaId` es SIEMPRE una cuenta exacta: la de Leo para el equipo, la propia
+ *  para un alumno. Nunca "todo lo que no sea competencia": con alumnos eso
+ *  mezclaria sus publicaciones en el panel de Leo. */
+async function construirAnalisis(jwt, seccion = "completo", cuentaId) {
+  if (!cuentaId) throw new HttpError(500, "Falta la cuenta a analizar.");
+  const deCuenta = `cuenta_id=eq.${encodeURIComponent(cuentaId)}`;
   const necesita = (...secciones) => seccion === "completo" || secciones.includes(seccion);
   const si = (activa, recurso, consulta = "select=*") => activa ? traer(recurso, consulta, jwt) : Promise.resolve([]);
   const sinConfig = faltaConfig();
@@ -445,11 +451,11 @@ async function construirAnalisis(jwt, seccion = "completo") {
   }
   if (seccion === "negocio") return await construirNegocio(jwt);
   if (seccion === "historias") {
-    const [filas, metricas] = await Promise.all([traer("historia", "select=*&order=publicado_en.desc,historia_id.asc", jwt), traer("historia_metrica", "select=*&order=fecha_snapshot.desc,historia_id.asc", jwt)]);
+    const [filas, metricas] = await Promise.all([traer("historia", `select=*&${deCuenta}&order=publicado_en.desc,historia_id.asc`, jwt), traer("historia_metrica", "select=*&order=fecha_snapshot.desc,historia_id.asc", jwt)]);
     return { historias: construirHistorias(filas, metricas) };
   }
   if (seccion === "audiencia") {
-    const [filas, cuenta] = await Promise.all([traer("audiencia_snapshot", "select=*&order=fecha_snapshot.desc,corte.asc,clave.asc", jwt), traer("cuenta_metrica", "select=*&cuenta_id=not.like.externa:*&order=fecha_snapshot.desc&limit=1", jwt)]);
+    const [filas, cuenta] = await Promise.all([traer("audiencia_snapshot", `select=*&${deCuenta}&order=fecha_snapshot.desc,corte.asc,clave.asc`, jwt), traer("cuenta_metrica", `select=*&${deCuenta}&order=fecha_snapshot.desc&limit=1`, jwt)]);
     return { audiencia: construirAudiencia(filas, cuenta[0] ?? {}) };
   }
 
@@ -482,24 +488,24 @@ async function construirAnalisis(jwt, seccion = "completo") {
     // Solo la cuenta propia. Desde que se cargan competidores, v_pieza_ranking
     // tambien trae sus piezas, y contarlas inflaba n_total y metia sus posts en
     // el calendario de Leo. La competencia se lee aparte, en su seccion.
-    traer("v_pieza_ranking", "select=*&cuenta_id=not.like.externa:*", jwt),
-    traer("v_base_formato", "select=*", jwt),
-    si(necesita("resumen", "piezas", "palabra-clave"), "v_pilar_rendimiento", "select=*"),
-    si(necesita("palabra-clave"), "v_efecto_palabra_clave", "select=*"),
+    traer("v_pieza_ranking", `select=*&${deCuenta}`, jwt),
+    traer("v_base_formato", `select=*&${deCuenta}`, jwt),
+    si(necesita("resumen", "piezas", "palabra-clave"), "v_pilar_rendimiento", `select=*&${deCuenta}`),
+    si(necesita("palabra-clave"), "v_efecto_palabra_clave", `select=*&${deCuenta}`),
     traer("pieza_pilar", "select=post_id,pilar", jwt),
     // Desde la Fase 5, `pieza` tambien guarda publicaciones de la competencia
     // (cuenta_id con prefijo `externa:`). Contarlas como catalogo de Leo
     // inflaba n_total sin que nada avisara.
-    traer("pieza", "select=post_id,palabra_clave,cuenta_id&cuenta_id=not.like.externa:*", jwt),
-    traer("cuenta", "select=*&es_propia=is.true", jwt),
+    traer("pieza", `select=post_id,palabra_clave,cuenta_id&${deCuenta}`, jwt),
+    traer("cuenta", `select=*&id=eq.${encodeURIComponent(cuentaId)}`, jwt),
     // Solo la cuenta propia: sin el filtro, la fila mas reciente puede ser de
     // un competidor y el KPI "Seguidores" del Resumen muestra los de otra
     // cuenta. Paso: mostro 751.269 de @therealbrianmark en vez de 106.345.
-    traer("cuenta_metrica", "select=*&cuenta_id=not.like.externa:*&order=fecha_snapshot.desc&limit=90", jwt),
+    traer("cuenta_metrica", `select=*&${deCuenta}&order=fecha_snapshot.desc&limit=90`, jwt),
     traer("config", "select=clave,valor", jwt),
     si(necesita("piezas"), "pieza_metrica", "select=post_id,fecha_snapshot,fuente,interacciones_totales"),
-    si(necesita("audiencia"), "audiencia_snapshot", "select=corte,clave,valor,fecha_snapshot&order=fecha_snapshot.desc"),
-    si(necesita("historias", "calendario", "resumen"), "historia", "select=*"),
+    si(necesita("audiencia"), "audiencia_snapshot", `select=corte,clave,valor,fecha_snapshot&${deCuenta}&order=fecha_snapshot.desc`),
+    si(necesita("historias", "calendario", "resumen"), "historia", `select=*&${deCuenta}`),
     si(necesita("historias", "calendario", "resumen"), "historia_metrica", "select=*&order=fecha_snapshot.desc"),
     si(necesita("competencia"), "cuenta", "select=id,username,es_propia"),
     si(necesita("competencia"), "pieza", "select=post_id,cuenta_id,permalink,fecha_publicacion,formato,primera_linea,thumb_path&cuenta_id=like.externa:*"),
@@ -883,7 +889,6 @@ function construirAnuncios(anuncios, campanas) {
    no es "no hubo ventas".
    -------------------------------------------------------------------------- */
 
-const META_MENSUAL_USD = 30000;
 const DIA_MS = 86_400_000;
 
 const isoDia = (d) => d.toISOString().slice(0, 10);
@@ -1030,7 +1035,6 @@ async function construirNegocio(jwt) {
 
   return {
     negocio: {
-      meta_mensual_usd: META_MENSUAL_USD,
       hoy,
       cobertura: Object.fromEntries(["meta", "ghl", "setter", "dolar"].map((f) => [f, cob[f] ? {
         desde: cob[f].cubre_desde, hasta: cob[f].cubre_hasta, cargado_en: cob[f].cargado_en, nota: cob[f].nota ?? null,
@@ -1119,7 +1123,7 @@ async function listarCompetidores(jwt) {
 
 const TOPE_COMPETIDORES = 5;
 
-async function salud(jwt) {
+async function salud(jwt, cuentaId) {
   const sinConfig = faltaConfig();
   if (sinConfig) {
     return { ok: false, fuente: "supabase", snapshot: null,
@@ -1128,7 +1132,7 @@ async function salud(jwt) {
   try {
     const filas = await traer(
       "v_pieza_ranking",
-      "select=post_id,fecha_snapshot,en_ventana&cuenta_id=not.like.externa:*&order=fecha_snapshot.desc",
+      `select=post_id,fecha_snapshot,en_ventana&cuenta_id=eq.${encodeURIComponent(cuentaId)}&order=fecha_snapshot.desc`,
       jwt
     );
     // Dos numeros a proposito: `n_piezas` es cuanto hay en la base y responde
@@ -1174,8 +1178,33 @@ async function identidad(req) {
   const user = await r.json();
   if (!user.id) throw new HttpError(401, "Sesión inválida.");
   const miembros = await traer("usuario", `select=id,rol&id=eq.${encodeURIComponent(user.id)}`, jwt);
-  if (!miembros.length) throw new HttpError(403, "Tu cuenta todavía no tiene acceso al dashboard. Contacta al equipo de Leo.");
-  return { jwt, id: user.id, rol: miembros[0].rol };
+  if (miembros.length) {
+    // Equipo: analiza la cuenta de Leo (la unica es_propia).
+    const propia = await traer("cuenta", "select=id&es_propia=is.true&limit=1", jwt);
+    return { jwt, id: user.id, email: user.email ?? null, tipo: "equipo", rol: miembros[0].rol, cuentaId: propia[0]?.id ?? null, conexion: null };
+  }
+  // Alumno: solo su propia cuenta conectada. RLS de instagram_conexion ya
+  // limita a su workspace; el registro abierto esta desactivado, asi que todo
+  // usuario autenticado fuera del equipo fue invitado por el equipo.
+  const conexiones = await traer("instagram_conexion",
+    "select=id,instagram_user_id,username,estado,token_expira_en,ultima_sincronizacion,ultimo_error_publico,actualizado_en&order=actualizado_en.desc", jwt);
+  const vigente = conexiones.find((c) => ["activa", "vencida", "error"].includes(c.estado)) ?? null;
+  return { jwt, id: user.id, email: user.email ?? null, tipo: "alumno", rol: "alumno", cuentaId: vigente?.instagram_user_id ?? null, conexion: vigente ?? conexiones[0] ?? null };
+}
+
+const SECCIONES_ALUMNO = new Set(["resumen", "calendario", "piezas", "historias"]);
+
+function yo(user) {
+  const c = user.conexion;
+  return {
+    email: user.email,
+    tipo: user.tipo,
+    rol: user.rol,
+    instagram: c ? {
+      estado: c.estado, username: c.username ?? null, ultima_sincronizacion: c.ultima_sincronizacion ?? null,
+      token_expira_en: c.token_expira_en ?? null, error: c.ultimo_error_publico ?? null,
+    } : null,
+  };
 }
 
 const SECCIONES = new Set(["completo", "resumen", "calendario", "piezas", "palabra-clave", "historias", "competencia", "audiencia", "anuncios", "mesa", "negocio"]);
@@ -1190,6 +1219,11 @@ async function atender(req, res) {
     "/api/plan": ["GET", "POST", "PATCH", "DELETE"],
     "/api/ideas": ["GET", "POST", "PATCH"],
     "/api/ideas/sugerencias": ["GET"],
+    "/api/yo": ["GET"],
+    "/api/cabecera": ["GET"],
+    "/api/instagram/iniciar": ["POST"],
+    "/api/instagram/callback": ["POST"],
+    "/api/instagram/desconectar": ["POST"],
   };
   const permitidos = methods[url.pathname];
   if (!permitidos) throw new HttpError(404, "La ruta no existe.");
@@ -1201,15 +1235,26 @@ async function atender(req, res) {
   if (!await rateLimit(`user:${user.id}:${req.method === "GET" ? "read" : "write"}`, req.method === "GET" ? 60 : 15, ENV)) {
     return json(res, { error: "Has alcanzado el límite. Espera un minuto." }, 429, { "retry-after": "60" });
   }
-  const { jwt } = user;
-  if (url.pathname === "/api/salud") return json(res, await salud(jwt));
+  const { jwt, cuentaId } = user;
+  if (url.pathname === "/api/yo") return json(res, yo(user));
+  if (url.pathname.startsWith("/api/instagram/")) return await rutaInstagram(req, res, user, url.pathname, ENV);
+  if (user.tipo === "alumno") {
+    // Un alumno solo llega a su contenido. Todo lo demas es del equipo.
+    if (!["/api/salud", "/api/analisis", "/api/catalogo", "/api/cabecera"].includes(url.pathname)) throw new HttpError(403, "Esta sección es del equipo de Prime Club.");
+    if (url.pathname === "/api/analisis" && !SECCIONES_ALUMNO.has(url.searchParams.get("seccion") || "")) throw new HttpError(403, "Esta sección es del equipo de Prime Club.");
+    if (!cuentaId) return json(res, { error: "Conecta tu Instagram para ver tus datos." });
+  } else if (!cuentaId) {
+    throw new HttpError(503, "No se encontró la cuenta principal.");
+  }
+  if (url.pathname === "/api/salud") return json(res, await salud(jwt, cuentaId));
+  if (url.pathname === "/api/cabecera") return json(res, await cabecera(jwt, cuentaId));
   if (url.pathname === "/api/analisis") {
     const seccion = url.searchParams.get("seccion") || "completo";
     if (!SECCIONES.has(seccion)) throw new HttpError(400, "La sección no es válida.");
     // Ingresos y nombres de prospectos: solo admin. RLS ya lo impide; esto
     // evita que otro rol reciba un panel vacio que parezca "cero ventas".
     if (seccion === "negocio" && user.rol !== "admin") throw new HttpError(403, "Esta sección es solo para administración.");
-    const d = await construirAnalisis(jwt, seccion);
+    const d = await construirAnalisis(jwt, seccion, cuentaId);
     if (seccion === "negocio") return json(res, d);
     if (!d.error && seccion !== "completo") {
       if (seccion === "resumen") {
@@ -1235,9 +1280,9 @@ async function atender(req, res) {
     }
     return json(res, d);
   }
-  if (url.pathname === "/api/catalogo") return json(res, await catalogo(url.searchParams, jwt));
+  if (url.pathname === "/api/catalogo") return json(res, await catalogo(url.searchParams, jwt, cuentaId));
   if (url.pathname === "/api/plan") return await plan(req, res, user);
-  if (url.pathname === "/api/ideas/sugerencias") return json(res, await listarSugerencias(url.searchParams, jwt));
+  if (url.pathname === "/api/ideas/sugerencias") return json(res, await listarSugerencias(url.searchParams, jwt, cuentaId));
   if (url.pathname === "/api/ideas") return await ideas(req, res, user);
   if (req.method === "GET") return json(res, await listarCompetidores(jwt));
   if (user.rol === "lectura") throw new HttpError(403, "Tu acceso es de lectura.");
@@ -1278,7 +1323,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
   createServer(handler).listen(PUERTO, "127.0.0.1", () => console.log(`API en http://localhost:${PUERTO}`));
 }
 
-async function catalogo(params, jwt) {
+async function catalogo(params, jwt, cuentaId) {
   const pagina = Number(params.get('pagina') || 1);
   const dias = params.get('dias') || '90';
   const formato = params.get('formato') || 'todos';
@@ -1289,7 +1334,7 @@ async function catalogo(params, jwt) {
   const ordenes = { fecha: 'fecha_publicacion.desc,post_id.desc', guardado: 'tasa_guardado.desc.nullslast,post_id.desc', alcance: 'alcance.desc.nullslast,post_id.desc' };
   if (!ordenes[orden] || buscar.length > 100) throw new HttpError(400, 'Filtro inválido.');
   const desde = new Date(Date.now() - Number(dias) * 86400000).toISOString().slice(0,10);
-  const q = new URLSearchParams({ select: '*', cuenta_id: 'not.like.externa:*', fecha_publicacion: `gte.${desde}`, order: ordenes[orden] });
+  const q = new URLSearchParams({ select: '*', cuenta_id: `eq.${cuentaId}`, fecha_publicacion: `gte.${desde}`, order: ordenes[orden] });
   if (formato !== 'todos') q.set('formato', `eq.${formato}`);
   if (params.get('solidas') === 'true') q.set('apto_ranking', 'is.true');
   if (buscar) q.set('primera_linea', `ilike.*${buscar.replace(/[%*_,()\\]/g, ' ')}*`);
@@ -1391,7 +1436,7 @@ async function ideas(req, res, { jwt, rol }) {
   return json(res, { ok: true, idea: r.datos[0] }, nuevo ? 201 : 200);
 }
 
-async function listarSugerencias(params, jwt) {
+async function listarSugerencias(params, jwt, cuentaId) {
   const formato = params.get("formato");
   if (formato && !FORMATOS_IDEA.includes(formato)) throw new HttpError(400, "El formato no es válido.");
   // "desde" = cuantas sugerencias sin guardar quedan en pantalla. Guardar o
@@ -1399,7 +1444,7 @@ async function listarSugerencias(params, jwt) {
   const desde = Number(params.get("desde") ?? 0);
   if (!Number.isInteger(desde) || desde < 0 || desde > 5000) throw new HttpError(400, "El parámetro desde no es válido.");
   const [d, usadas] = await Promise.all([
-    construirAnalisis(jwt, "competencia"),
+    construirAnalisis(jwt, "competencia", cuentaId),
     rest("idea?select=clave_sugerencia&clave_sugerencia=not.is.null&limit=5000", { jwt }),
   ]);
   if (d.error) return d;
@@ -1411,4 +1456,36 @@ async function listarSugerencias(params, jwt) {
     formato,
     desde,
   });
+}
+
+/* --------------------------------------------------------------------------
+   Barra superior: los cuatro numeros que se miran primero, de la cuenta de
+   quien mira (Leo para el equipo, la propia para un alumno).
+   -------------------------------------------------------------------------- */
+async function cabecera(jwt, cuentaId) {
+  const id = encodeURIComponent(cuentaId);
+  const desde = new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10);
+  const [cuentas, metricas, piezas] = await Promise.all([
+    traer("cuenta", `select=username,nombre&id=eq.${id}`, jwt),
+    traer("cuenta_metrica", `select=fecha_snapshot,seguidores&cuenta_id=eq.${id}&order=fecha_snapshot.desc&limit=60`, jwt),
+    traer("v_pieza_ranking", `select=alcance,guardados&cuenta_id=eq.${id}&fecha_publicacion=gte.${desde}`, jwt),
+  ]);
+  const ultima = metricas[0];
+  // Base de comparacion: la medicion mas vieja dentro de los ultimos 30 dias.
+  const base = [...metricas].reverse().find((m) => m.fecha_snapshot >= desde && aNumero(m.seguidores) !== null);
+  const seguidores = aNumero(ultima?.seguidores);
+  const suma = (k) => {
+    const v = piezas.map((p) => aNumero(p[k])).filter((x) => x !== null);
+    return v.length ? v.reduce((a, b) => a + b, 0) : null;
+  };
+  return {
+    username: cuentas[0]?.username ?? null,
+    nombre: cuentas[0]?.nombre ?? null,
+    seguidores,
+    seguidores_30d: seguidores !== null && base && base !== ultima ? seguidores - aNumero(base.seguidores) : null,
+    alcance_30d: suma("alcance"),
+    guardados_30d: suma("guardados"),
+    publicaciones_30d: piezas.length,
+    actualizado: ultima?.fecha_snapshot ?? null,
+  };
 }

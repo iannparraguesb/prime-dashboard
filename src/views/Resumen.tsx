@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Delta, NOMBRE_FORMATO, num, compacto, haceCuanto } from "../components/ui";
+import { Delta, NOMBRE_FORMATO, num, compacto } from "../components/ui";
 import { GraficoBarras } from "../components/GraficoBarras";
 import { Icono } from "../components/icons";
 import type { Analisis, FilaCalendario } from "../tipos";
@@ -15,7 +15,7 @@ const sumar = (xs: (number | null | undefined)[]) => {
   return v.length ? v.reduce((a, b) => a + b, 0) : null;
 };
 
-export function Resumen({ d }: { d: Analisis }) {
+export function Resumen({ d, equipo = true }: { d: Analisis; equipo?: boolean }) {
   const [dias, setDias] = useState(30);
   const ahora = Date.now();
   const filas = d.calendario ?? [];
@@ -53,7 +53,6 @@ export function Resumen({ d }: { d: Analisis }) {
             </button>
           ))}
         </div>
-        <span className="frescura-pill" data-tono={frescura(d.snapshot)}>Instagram actualizado {haceCuanto(d.snapshot)}</span>
       </div>
 
       <div className="kpis">
@@ -108,7 +107,7 @@ export function Resumen({ d }: { d: Analisis }) {
             <h2>{propuesta.accion}</h2>
             <p>{propuesta.titulo}</p>
             <div style={{ display: "flex", gap: "var(--e2)", marginTop: "var(--e3)" }}>
-              <a className="btn" href="#mesa">Ver ideas</a>
+              {equipo ? <a className="btn" href="#mesa">Ver ideas</a> : null}
               {propuesta.permalink ? <a className="btn" href={propuesta.permalink} target="_blank" rel="noreferrer">Abrir en Instagram</a> : null}
             </div>
           </div>
@@ -154,12 +153,6 @@ function TarjetaPieza({ p, rango }: { p: FilaCalendario; rango: number }) {
   ) : (
     <div className="top-pieza">{cuerpo}</div>
   );
-}
-
-function frescura(iso: string | null | undefined) {
-  if (!iso) return "mal";
-  const dias = (Date.now() - new Date(`${iso}T12:00:00`).getTime()) / DIA;
-  return dias < 1.5 ? "bien" : dias < 3 ? "ojo" : "mal";
 }
 
 /** Alcance sumado por dia (7 dias) o por semana (30/90). */

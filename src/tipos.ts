@@ -179,7 +179,6 @@ export interface PeriodoNegocio {
 export interface CoberturaFuente { desde: string; hasta: string; cargado_en: string; nota: string | null }
 
 export interface Negocio {
-  meta_mensual_usd: number;
   hoy: string;
   cobertura: Record<"meta" | "ghl" | "setter" | "dolar", CoberturaFuente | null>;
   dolar: { mes: string; clp_por_usd: Numerico; fuente: string }[];

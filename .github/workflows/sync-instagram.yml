@@ -43,3 +43,6 @@ jobs:
       - name: Cargar a Supabase
         if: ${{ !cancelled() }}
         run: python3 tools/ig_a_supabase.py --miniaturas
+      - name: Alumnos conectados
+        if: ${{ !cancelled() }}
+        run: python3 tools/ig_alumnos.py

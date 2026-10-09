@@ -13,25 +13,30 @@
   --prime-white: #f5f1e8;
   --prime-muted: #a89882;
 
-  /* Capas: base -> elevado -> flotante. Nada vive en el mismo plano z. */
-  --bg: #070603;
-  --superficie: #100c07;
-  --superficie-alta: #191309;
-  --flotante: #20180c;
-  --linea: #2e2415;
-  --linea-fuerte: #4a3a1f;
+  /* Capas: base -> elevado -> flotante. Tema claro por defecto: lienzo marfil
+     calido (no blanco puro), tarjetas blancas, dorado solo como acento. */
+  --bg: #f6f3ec;
+  --superficie: #ffffff;
+  --superficie-alta: #f4f0e7;
+  --flotante: #ffffff;
+  --linea: #ebe5d8;
+  --linea-fuerte: #d9cfbc;
 
-  /* Texto */
-  --texto: var(--prime-white);
-  --texto-2: #bdae95;
-  --texto-3: var(--prime-muted);
-  --acento: var(--prime-gold);
-  --acento-claro: var(--prime-gold-pale);
+  /* Texto. Todos pasan AA sobre blanco; el bronce es el unico dorado legible. */
+  --texto: #1a1207;
+  --texto-2: #554a3b;
+  --texto-3: #766b5b;
+  --acento: #a85f08;
+  --acento-claro: #96530a;
 
-  /* Semaforo, tintado hacia la marca para que no parezca Bootstrap */
-  --bien: #6fbf73;
-  --ojo: #d99a2b;
-  --mal: #d2603f;
+  --bien: #2e7d43;
+  --ojo: #a8650c;
+  --mal: #b93f1c;
+
+  /* Brillo y grano del lienzo, por tema */
+  --brillo-1: rgba(232, 176, 60, 0.10);
+  --brillo-2: rgba(250, 205, 92, 0.08);
+  --grano: 0.02;
 
   /* Espaciado — tokens, no pasos al azar */
   --e1: 4px;
@@ -42,8 +47,8 @@
   --e6: 32px;
   --e7: 48px;
 
-  --radio: 10px;
-  --radio-sm: 6px;
+  --radio: 16px;
+  --radio-sm: 10px;
 
   /* Escala de titulares. Salto grande a proposito: en un panel denso, la
      jerarquia tiene que resolverse de un vistazo, no leyendo. */
@@ -53,8 +58,8 @@
   --t-dato: 30px;
 
   /* Sombras en capas y tintadas, nunca un shadow plano */
-  --sombra: 0 1px 2px rgba(0, 0, 0, 0.6), 0 8px 24px -12px rgba(232, 176, 60, 0.18);
-  --sombra-alta: 0 2px 4px rgba(0, 0, 0, 0.7), 0 18px 44px -18px rgba(232, 176, 60, 0.26);
+  --sombra: 0 1px 2px rgba(26, 18, 7, 0.04), 0 12px 32px -18px rgba(26, 18, 7, 0.16);
+  --sombra-alta: 0 2px 6px rgba(26, 18, 7, 0.06), 0 24px 48px -20px rgba(26, 18, 7, 0.24);
 
   /* Manrope para todo. Variable 200-800: la jerarquia la carga el peso y el
      tracking, no un cambio de familia. Sus numerales son de ancho parejo, que
@@ -64,6 +69,31 @@
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
 
   --transicion: 180ms cubic-bezier(0.2, 0.9, 0.3, 1.2);
+  color-scheme: light;
+}
+
+/* Tema oscuro: los valores originales del panel (negro + dorado + marfil). */
+:root[data-theme="dark"] {
+  --bg: #070603;
+  --superficie: #100c07;
+  --superficie-alta: #191309;
+  --flotante: #20180c;
+  --linea: #2e2415;
+  --linea-fuerte: #4a3a1f;
+  --texto: var(--prime-white);
+  --texto-2: #bdae95;
+  --texto-3: var(--prime-muted);
+  --acento: var(--prime-gold);
+  --acento-claro: var(--prime-gold-pale);
+  --bien: #6fbf73;
+  --ojo: #d99a2b;
+  --mal: #d2603f;
+  --brillo-1: rgba(168, 95, 8, 0.16);
+  --brillo-2: rgba(232, 176, 60, 0.09);
+  --grano: 0.035;
+  --sombra: 0 1px 2px rgba(0, 0, 0, 0.6), 0 8px 24px -12px rgba(232, 176, 60, 0.18);
+  --sombra-alta: 0 2px 4px rgba(0, 0, 0, 0.7), 0 18px 44px -18px rgba(232, 176, 60, 0.26);
+  color-scheme: dark;
 }
 
 * {
@@ -87,8 +117,8 @@ body {
   font-size: 14px;
   /* Textura de fondo: dos radiales en capas + grano SVG, para que el negro no
      sea un plano muerto. */
-  background-image: radial-gradient(1100px 620px at 12% -8%, rgba(168, 95, 8, 0.16), transparent 62%),
-    radial-gradient(900px 520px at 96% 4%, rgba(232, 176, 60, 0.09), transparent 58%);
+  background-image: radial-gradient(1100px 620px at 12% -8%, var(--brillo-1), transparent 62%),
+    radial-gradient(900px 520px at 96% 4%, var(--brillo-2), transparent 58%);
   background-attachment: fixed;
 }
 
@@ -100,7 +130,7 @@ body::before {
   inset: 0;
   z-index: 9999;
   pointer-events: none;
-  opacity: 0.035;
+  opacity: var(--grano);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='r'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23r)'/%3E%3C/svg%3E");
 }
 
@@ -1731,3 +1761,166 @@ a.idea-origen:hover { color: var(--acento-claro); }
   .idea-nueva { grid-template-columns: 1fr; }
   .tablero { grid-template-columns: repeat(4, 78vw); }
 }
+
+/* Conectar Instagram (alumnos) */
+.ig-card { padding: var(--e5); display: flex; gap: var(--e4); align-items: flex-start; }
+.ig-icono { width: 52px; height: 52px; border-radius: 14px; display: grid; place-items: center; flex-shrink: 0; color: #fff;
+  background: radial-gradient(circle at 30% 107%, #fdf497 0%, #fd5949 45%, #d6249f 60%, #285AEB 90%); }
+.ig-cuerpo { display: grid; gap: var(--e3); }
+.ig-cuerpo h2 { margin: 0; font-size: 20px; }
+.ig-cuerpo p { margin: 0; color: var(--texto-2); line-height: 1.6; }
+.ig-cuerpo small { color: var(--texto-3); font-size: 12px; line-height: 1.5; }
+.ig-boton { justify-self: start; padding: 12px 22px; font-weight: 700; color: #fff; border: none;
+  background: linear-gradient(90deg, #d6249f, #8a3ab9); box-shadow: 0 8px 24px -10px rgba(214, 36, 159, .6); }
+.ig-boton:hover:not(:disabled) { transform: translateY(-1px); }
+.ig-boton:active:not(:disabled) { transform: translateY(0); }
+.ig-boton:focus-visible { outline: 2px solid var(--acento); outline-offset: 3px; }
+.ig-acciones { display: flex; gap: var(--e2); flex-wrap: wrap; align-items: center; }
+.ig-alerta { color: var(--ojo) !important; }
+.ig-confirmar { font-size: 13px; color: var(--texto-2); }
+.ig-permisos { padding: var(--e5); }
+.ig-permisos h3 { margin: 0 0 var(--e3); font-size: 14px; display: flex; align-items: center; gap: 6px; }
+.ig-grilla { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--e2); }
+.ig-grilla div { display: flex; align-items: center; gap: var(--e2); padding: var(--e3); border-radius: var(--radio-sm);
+  background: var(--superficie-alta); font-size: 13px; color: var(--texto-2); }
+@media (max-width: 760px) { .ig-card { flex-direction: column; } }
+
+/* ==========================================================================
+   Rediseño claro (oct-2026). Va al final: redefine layout y tarjetas sobre
+   los estilos de arriba. Funciona igual en los dos temas: todo sale de tokens.
+   ========================================================================== */
+.app { grid-template-columns: 248px 1fr; }
+.lateral {
+  background: var(--superficie);
+  border-right: 1px solid var(--linea);
+  padding: var(--e5) var(--e3) var(--e4);
+  gap: var(--e4);
+}
+.marca { padding: 0 var(--e2) var(--e2); }
+.marca-punto { width: 36px; height: 36px; flex-basis: 36px; border-radius: 12px; font-size: 16px; }
+.marca-txt { font-size: 17px; font-weight: 800; }
+.marca-sub { text-transform: none; letter-spacing: 0; font-size: 12px; }
+
+.nav { gap: var(--e4); }
+.nav-grupo { display: flex; flex-direction: column; gap: 2px; }
+.nav-titulo { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--texto-3); padding: 0 var(--e3) var(--e1); }
+.nav button { padding: 10px 12px; border-radius: 12px; font-size: 14.5px; color: var(--texto-2); gap: 12px; transition: background-color var(--transicion), color var(--transicion); }
+.nav button svg { color: var(--texto-3); transition: color var(--transicion); }
+.nav button:hover { background: var(--superficie-alta); color: var(--texto); }
+.nav button:focus-visible { outline: 2px solid var(--acento); outline-offset: 1px; }
+.nav button[aria-current="true"] { background: var(--superficie-alta); border-color: transparent; color: var(--texto); font-weight: 700; box-shadow: none; }
+.nav button[aria-current="true"] svg { color: var(--acento); }
+
+.rol { border-top: 1px solid var(--linea); padding-top: var(--e4); display: grid; gap: var(--e3); }
+.rol-ops { background: var(--superficie-alta); border-radius: 999px; padding: 3px; gap: 2px; flex-wrap: nowrap; }
+.rol-ops button { flex: 1; border: none; border-radius: 999px; padding: 6px 10px; }
+.rol-ops button[aria-pressed="true"] { background: var(--superficie); color: var(--texto); box-shadow: var(--sombra); }
+.usuario-pie { display: grid; gap: var(--e2); }
+.usuario-pie span { font-size: 12px; color: var(--texto-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.usuario-pie .salir { all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--mal); padding: 6px 4px; border-radius: 8px; }
+.usuario-pie .salir:hover { text-decoration: underline; }
+.usuario-pie .salir:focus-visible { outline: 2px solid var(--mal); outline-offset: 2px; }
+
+.principal { padding: var(--e4) var(--e6) var(--e7); max-width: 1560px; }
+
+/* Barra superior: pastilla flotante, como un estado de cuenta siempre a la vista */
+.barra-sup {
+  position: sticky; top: var(--e3); z-index: 20;
+  display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: var(--e5);
+  padding: 10px var(--e4) 10px 10px; margin-bottom: var(--e5);
+  background: color-mix(in srgb, var(--superficie) 88%, transparent);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--linea); border-radius: 20px; box-shadow: var(--sombra);
+}
+.barra-cuenta { display: flex; align-items: center; gap: var(--e3); min-width: 0; }
+.barra-cuenta strong { display: block; font-size: 14.5px; }
+.avatar {
+  width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; flex-shrink: 0;
+  font-family: var(--display); font-weight: 800; color: var(--prime-ink);
+  background: linear-gradient(140deg, var(--prime-bronze), var(--prime-gold-bright) 55%, var(--prime-amber));
+}
+.pastilla { display: inline-block; margin-top: 2px; font-size: 10.5px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--linea-fuerte); color: var(--texto-3); }
+.barra-stats { display: flex; justify-content: center; }
+.barra-stat { display: flex; align-items: center; gap: 10px; padding: 0 var(--e5); }
+.barra-stat + .barra-stat { border-left: 1px solid var(--linea); }
+.barra-stat > svg { color: var(--acento); }
+.barra-stat span { display: block; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--texto-3); }
+.barra-stat strong { font-size: 15px; font-variant-numeric: tabular-nums; display: flex; align-items: baseline; gap: 6px; }
+.barra-stat em { font-style: normal; font-size: 11.5px; font-weight: 600; }
+.barra-stat em[data-tono="sube"] { color: var(--bien); }
+.barra-stat em[data-tono="baja"] { color: var(--mal); }
+.barra-acciones { display: flex; align-items: center; gap: var(--e2); }
+.chip-fecha { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--texto-2); padding: 7px 12px; border: 1px solid var(--linea); border-radius: 999px; }
+.btn-icono {
+  width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; cursor: pointer;
+  border: 1px solid var(--linea); background: var(--superficie); color: var(--texto-2);
+  transition: background-color var(--transicion), color var(--transicion), transform var(--transicion);
+}
+.btn-icono:hover:not(:disabled) { background: var(--superficie-alta); color: var(--texto); }
+.btn-icono:active:not(:disabled) { transform: scale(0.94); }
+.btn-icono:focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; }
+.btn-icono:disabled { opacity: 0.5; cursor: progress; }
+
+.aviso-global {
+  display: flex; align-items: center; gap: var(--e3); margin-bottom: var(--e5);
+  padding: 14px var(--e4); border-radius: var(--radio);
+  background: color-mix(in srgb, var(--ojo) 10%, var(--superficie));
+  border: 1px solid color-mix(in srgb, var(--ojo) 35%, transparent); color: var(--texto);
+}
+.aviso-global > svg { color: var(--ojo); flex-shrink: 0; }
+.aviso-global span { flex: 1; }
+
+.cabecera { margin-bottom: var(--e5); }
+.cabecera h1 { font-size: clamp(32px, 3.6vw, 46px); letter-spacing: -0.04em; padding-bottom: 6px; }
+.cabecera p { color: var(--texto-2); font-size: 15px; }
+
+/* Tarjetas: superficie blanca, borde fino, sombra suave */
+.card { border-radius: var(--radio); box-shadow: var(--sombra); border-color: var(--linea); }
+
+/* KPI: numero grande y liviano, icono en circulo arriba a la derecha */
+.kpis { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: var(--e4); }
+.kpi { padding: 22px 24px 20px; min-height: 152px; display: flex; flex-direction: column; transition: transform var(--transicion), box-shadow var(--transicion); }
+.kpi:hover { background: var(--superficie); transform: translateY(-2px); box-shadow: var(--sombra-alta); }
+.kpi::after { display: none; }
+.kpi-lbl { color: var(--texto-2); letter-spacing: 0.08em; font-size: 11.5px; padding-right: 52px; min-height: 36px; }
+.kpi-lbl svg {
+  position: absolute; top: 18px; right: 18px; width: 18px; height: 18px; padding: 10px; box-sizing: content-box;
+  border-radius: 50%; background: var(--superficie-alta); color: var(--texto-2);
+}
+.kpi-val {
+  font-size: clamp(34px, 3.1vw, 46px); font-weight: 300; letter-spacing: -0.045em; margin-top: auto; padding-top: var(--e3);
+  background: none; -webkit-background-clip: border-box; background-clip: border-box; color: var(--texto);
+}
+.kpi-pie { margin-top: 10px; font-size: 12.5px; }
+
+/* Chips sobre miniaturas: siempre claros sobre la imagen, en ambos temas */
+.top-rango, .top-formato { color: #fff; }
+.top-rango { color: var(--prime-gold-pale); }
+
+/* Tablas y filtros respiran como el resto */
+.tabla-caja { border-radius: var(--radio); box-shadow: var(--sombra); }
+.chip { border-radius: 999px; }
+
+@media (max-width: 1100px) {
+  .barra-sup { grid-template-columns: 1fr auto; }
+  .barra-stats { display: none; }
+}
+@media (max-width: 760px) {
+  .app { grid-template-columns: 1fr; }
+  .principal { padding: var(--e3) var(--e4) var(--e6); }
+  .barra-sup { top: 0; border-radius: 16px; }
+  .chip-fecha { display: none; }
+  .kpi { min-height: 132px; }
+}
+@media (max-width: 760px) {
+  .nav { gap: 2px; }
+  .nav-grupo { display: contents; }
+  .nav-titulo { display: none; }
+  .rol { grid-template-columns: 1fr auto; align-items: center; }
+  .rol .rol-ops { display: none; }
+}
+.comp-filtros .control { width: auto; flex: 0 0 auto; min-width: 190px; }
+.comp-filtros .chips { flex: 0 1 auto; }
+/* El numero se ajusta al ancho de SU tarjeta, no al de la ventana: con 5 tarjetas no se desborda. */
+.kpi { container-type: inline-size; }
+.kpi-val { font-size: clamp(26px, 17cqi, 46px); white-space: nowrap; }

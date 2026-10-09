@@ -2,6 +2,7 @@ import { useState } from "react";
 import { SinDatosSeccion } from "../components/states";
 import { Badge, Delta, num, pct, NADA, haceCuanto } from "../components/ui";
 import { GraficoBarras } from "../components/GraficoBarras";
+import { Icono } from "../components/icons";
 import type { Analisis, Negocio as DatosNegocio, PeriodoNegocio, Numerico } from "../tipos";
 
 const ES = "es-CL";
@@ -44,11 +45,10 @@ export function Negocio({ d }: { d: Analisis }) {
           ))}
         </div>
         <span className="frescura-pill" data-tono={frescura(n.cobertura.ghl?.cargado_en)}>
-          Actualizado {haceCuanto(n.cobertura.ghl?.cargado_en ?? n.cobertura.meta?.cargado_en)}
+          Ventas actualizadas {haceCuanto(n.cobertura.ghl?.cargado_en ?? n.cobertura.meta?.cargado_en)}
         </span>
       </div>
 
-      <Meta n={n} m={mes} />
       <Kpis m={mes} previo={previo} />
       <Pendientes n={n} />
 
@@ -87,48 +87,33 @@ function frescura(iso: string | undefined | null) {
   return horas < 30 ? "bien" : horas < 72 ? "ojo" : "mal";
 }
 
-function Meta({ n, m }: { n: DatosNegocio; m: PeriodoNegocio }) {
-  const avance = m.ingresos_usd === null ? null : (m.ingresos_usd / n.meta_mensual_usd) * 100;
-  return (
-    <div className="card neg-meta">
-      <div>
-        <span className="kpi-lbl">Vendiste en {nombreMes(m.inicio)}</span>
-        <div className="neg-meta-valor">{usd(m.ingresos_usd)}</div>
-        <span className="neg-meta-sub">
-          {avance === null ? "Sin registro de ventas este mes" : `${pct(avance, 0)} de la meta de ${usd(n.meta_mensual_usd)} · faltan ${usd(n.meta_mensual_usd - (m.ingresos_usd ?? 0))}`}
-        </span>
-      </div>
-      {avance !== null ? (
-        <div className="neg-meta-barra" role="img" aria-label={`Avance a la meta: ${pct(avance, 0)}`}>
-          <span style={{ width: `${Math.min(avance, 100)}%` }} />
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
 function Kpis({ m, previo }: { m: PeriodoNegocio; previo: PeriodoNegocio | null }) {
   const ticket = m.ventas ? (m.ingresos_usd ?? 0) / m.ventas : null;
   return (
     <div className="kpis">
       <div className="card kpi">
-        <div className="kpi-lbl">Clientes nuevos</div>
+        <div className="kpi-lbl"><Icono nombre="dinero" size={18} /> Facturación</div>
+        <div className="kpi-val num">{usd(m.ingresos_usd)}</div>
+        <div className="kpi-pie">{m.ingresos_usd === null ? "sin registro de ventas este mes" : `en ${nombreMes(m.inicio)}`}</div>
+      </div>
+      <div className="card kpi">
+        <div className="kpi-lbl"><Icono nombre="perfil" size={18} /> Clientes nuevos</div>
         <div className="kpi-val num">{num(m.ventas)}</div>
         <div className="kpi-pie">{ticket ? `${usd(ticket)} promedio por cliente` : NADA}</div>
       </div>
       <div className="card kpi">
-        <div className="kpi-lbl">Invertido en anuncios</div>
+        <div className="kpi-lbl"><Icono nombre="megafono" size={18} /> Invertido en anuncios</div>
         <div className="kpi-val num">{usd(m.gasto_usd)}</div>
         <div className="kpi-pie">{clp(m.gasto_clp)} {/* Un mes en curso contra uno completo no es comparable. */}
           {!m.en_curso ? <Delta actual={m.gasto_usd} previo={previo?.gasto_usd} texto="vs. mes anterior" /> : null}</div>
       </div>
       <div className="card kpi">
-        <div className="kpi-lbl">Por cada US$1 en anuncios</div>
+        <div className="kpi-lbl"><Icono nombre="alcance" size={18} /> Por cada US$1</div>
         <div className="kpi-val num">{m.roas_total === null ? NADA : `US$${m.roas_total.toLocaleString(ES, { maximumFractionDigits: 1 })}`}</div>
-        <div className="kpi-pie">volvieron en ventas · {m.roas_anuncio === null ? NADA : `US$${m.roas_anuncio.toLocaleString(ES, { maximumFractionDigits: 1 })}`} contando solo clientes de anuncios</div>
+        <div className="kpi-pie">vendidos por cada dólar en anuncios · {m.roas_anuncio === null ? NADA : `US$${m.roas_anuncio.toLocaleString(ES, { maximumFractionDigits: 1 })}`} contando solo clientes de anuncios</div>
       </div>
       <div className="card kpi">
-        <div className="kpi-lbl">Costo por agenda</div>
+        <div className="kpi-lbl"><Icono nombre="calendario" size={18} /> Costo por agenda</div>
         <div className="kpi-val num">{usd(m.costo_agenda_usd)}</div>
         <div className="kpi-pie">{num(m.agendas)} llamadas agendadas</div>
       </div>

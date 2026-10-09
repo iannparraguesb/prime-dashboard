@@ -11,7 +11,7 @@
     "check": "tsc --noEmit",
     "preview": "vite preview",
     "test": "node --test pruebas/*.test.mjs",
-    "test:unit": "node --test pruebas/ideas.test.mjs pruebas/n1-puros.test.mjs pruebas/seguridad.test.mjs pruebas/multiusuario.test.mjs pruebas/multiusuario-db.test.mjs",
+    "test:unit": "node --test pruebas/instagram.test.mjs pruebas/alumnos-db.test.mjs pruebas/ideas.test.mjs pruebas/n1-puros.test.mjs pruebas/seguridad.test.mjs pruebas/multiusuario.test.mjs pruebas/multiusuario-db.test.mjs",
     "test:integration": "node --test pruebas/n2-supabase.test.mjs pruebas/n3-api.test.mjs"
   },
   "dependencies": {

@@ -3,7 +3,7 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "functions": {"api/index.mjs": {"maxDuration": 30}},
-  "rewrites": [{"source": "/api/:path*", "destination": "/api"}],
+  "rewrites": [{"source": "/api/:path*", "destination": "/api"}, {"source": "/conectar/:path*", "destination": "/index.html"}],
   "headers": [
     {"source": "/(.*)", "headers": [
       {"key": "X-Content-Type-Options", "value": "nosniff"},
