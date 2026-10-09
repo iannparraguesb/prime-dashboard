@@ -1,0 +1,58 @@
+name: Sincronizar todo (diario)
+# 06:40 de Chile. Cada fuente corre aunque otra falle; el job queda en rojo si alguna fallo.
+on:
+  schedule:
+    - cron: "40 9 * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ingesta-diaria
+  cancel-in-progress: false
+jobs:
+  sincronizar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      TZ: America/Santiago
+    defaults:
+      run:
+        working-directory: ingesta
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: ingesta
+      - name: Credenciales
+        env:
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          IG_BUSINESS_ID: ${{ secrets.IG_BUSINESS_ID }}
+          IG_API_VERSION: ${{ secrets.IG_API_VERSION }}
+          IG_COMPETENCIA: ${{ secrets.IG_COMPETENCIA }}
+          META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
+          META_AD_ACCOUNT_ID: ${{ secrets.META_AD_ACCOUNT_ID }}
+          META_API_VERSION: ${{ secrets.META_API_VERSION }}
+          GHL_TOKEN: ${{ secrets.GHL_TOKEN }}
+          GHL_LOCATION_ID: ${{ secrets.GHL_LOCATION_ID }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          umask 077
+          for v in IG_ACCESS_TOKEN IG_BUSINESS_ID IG_API_VERSION IG_COMPETENCIA META_ACCESS_TOKEN META_AD_ACCOUNT_ID META_API_VERSION GHL_TOKEN GHL_LOCATION_ID SUPABASE_URL SUPABASE_SERVICE_KEY; do
+            printf '%s=%s\n' "$v" "${!v}" >> .env
+          done
+      - name: Instagram completo (publicaciones del ultimo año + audiencia)
+        run: |
+          python3 tools/ig_dump.py --solo piezas --limite 200
+          python3 tools/ig_dump.py --solo audiencia --reanudar
+          python3 tools/ig_a_supabase.py --miniaturas
+      - name: Competencia
+        if: ${{ !cancelled() }}
+        run: python3 tools/ig_competencia.py --todos
+      - name: Meta Ads (anuncios)
+        if: ${{ !cancelled() }}
+        run: python3 tools/meta_a_supabase.py
+      - name: Negocio (gasto Meta + GHL)
+        if: ${{ !cancelled() }}
+        run: |
+          python3 -m pip install --quiet openpyxl
+          python3 tools/finanzas_a_supabase.py
