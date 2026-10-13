@@ -1002,10 +1002,16 @@ async function construirNegocio(jwt) {
     const s = setterPorNombre.get(k);
     const valor = aNumero(g?.valor);
     const monto = aNumero(s?.monto_usd);
+    // GHL mezcla monedas: el ticket se anota en USD (997) o en pesos (997.000).
+    // Ninguna venta en USD llega a 10.000, asi que sobre eso es CLP.
+    const moneda = valor === null ? null : valor >= 10000 ? "CLP" : "USD";
+    const tcVenta = g ? tc[mesDe(g.cambio_etapa)] ?? tc[Object.keys(tc).sort().at(-1)] : null;
+    const valorUsd = moneda === "CLP" ? (tcVenta ? redondear(valor / tcVenta, 2) : null) : valor;
     let estado;
     let ok = false;
     if (g && s?.resultado === "Cerró") {
-      ok = !(valor && monto && Math.abs(valor - monto) > 1);
+      // Tolerancia 3 %: el dolar del mes se mueve mientras el mes sigue abierto.
+      ok = !(valorUsd && monto && Math.abs(valorUsd - monto) > Math.max(1, monto * 0.03));
       estado = ok ? "Venta en ambas fuentes" : "Monto distinto: corregir el valor en GHL";
     } else if (g && s) {
       estado = `GHL dice Cerrada; el setter anoto "${s.resultado ?? "sin resultado"}" y asistio "${s.asistio ?? "sin anotar"}"`;
@@ -1019,6 +1025,8 @@ async function construirNegocio(jwt) {
       ghl_etapa: g?.etapa ?? null,
       ghl_fecha: g?.cambio_etapa ?? null,
       ghl_valor: valor,
+      ghl_moneda: moneda,
+      ghl_valor_usd: valorUsd,
       setter_resultado: s?.resultado ?? null,
       setter_asistio: s?.asistio ?? null,
       setter_monto_usd: monto,

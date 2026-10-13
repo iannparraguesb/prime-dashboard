@@ -190,7 +190,7 @@ export interface Negocio {
   etapas: { nombre: string; n: number }[];
   fuente_llamadas: { nombre: string; n: number }[];
   conciliacion: {
-    prospecto: string; ghl_etapa: string | null; ghl_fecha: string | null; ghl_valor: Numerico;
+    prospecto: string; ghl_etapa: string | null; ghl_fecha: string | null; ghl_valor: Numerico; ghl_moneda: "CLP" | "USD" | null; ghl_valor_usd: Numerico;
     setter_resultado: string | null; setter_asistio: string | null; setter_monto_usd: Numerico; estado: string; ok: boolean;
   }[];
   llamadas: {

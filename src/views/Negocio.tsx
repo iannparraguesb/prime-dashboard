@@ -238,7 +238,7 @@ function Conciliacion({ n }: { n: DatosNegocio }) {
             {n.conciliacion.map((c) => (
               <tr key={c.prospecto}>
                 <td>{c.prospecto}</td>
-                <td>{c.ghl_etapa ? `Cerrada${c.ghl_valor ? ` · ${c.ghl_valor.toLocaleString(ES)}` : ""}` : NADA}</td>
+                <td>{c.ghl_etapa ? `Cerrada${c.ghl_valor ? (c.ghl_moneda === "CLP" ? ` · CLP ${c.ghl_valor.toLocaleString(ES)} (≈ ${usd(c.ghl_valor_usd)})` : ` · ${usd(c.ghl_valor)}`) : ""}` : NADA}</td>
                 <td>{c.setter_resultado === "Cerró" ? `Compró · ${usd(c.setter_monto_usd)}` : c.setter_asistio === "No" ? "No se presentó" : c.setter_resultado ?? "No aparece"}</td>
                 <td style={{ whiteSpace: "normal" }}>{c.ok ? <Badge tono="bien">Todo OK</Badge> : textoAccion(c.estado)}</td>
               </tr>
