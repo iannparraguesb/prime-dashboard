@@ -96,9 +96,14 @@ export function Alumnos({ jwt }: { jwt: string | null }) {
     }
   };
 
+  // Tres pasos, en el orden en que el alumno los hace. El primero existe solo
+  // mientras la app de Meta este en modo desarrollo (testers de Instagram).
   const mensaje = nuevo
-    ? `Hola ${nuevo.nota}, ya puedes crear tu cuenta en el panel de Prime Club: entra a ${window.location.origin} y elige "Crear cuenta de alumno". ` +
-      `Tu código es ${nuevo.codigo}${nuevo.expira ? ` y vence el ${fecha(nuevo.expira)}` : ""}. Sirve una sola vez.`
+    ? `Hola ${nuevo.nota}, te invito a probar el panel de Prime Club.\n\n` +
+      `1. En Instagram acepta la invitación de evaluador de Prime Club: Configuración → Apps y sitios web → Invitaciones de evaluador.\n` +
+      `2. Entra a ${window.location.origin}, elige "¿Eres alumno y tienes un código? Crea tu cuenta" y usa este código: ${nuevo.codigo}` +
+      `${nuevo.expira ? ` (vence el ${fecha(nuevo.expira)})` : ""}. Sirve una sola vez.\n` +
+      `3. En "Mi Instagram" conecta tu cuenta. Tiene que ser profesional (empresa o creador). Tus datos aparecen en menos de una hora.`
     : "";
 
   const copiar = async () => {
@@ -129,7 +134,7 @@ export function Alumnos({ jwt }: { jwt: string | null }) {
         <div className="card invitacion-nueva" role="status">
           <span className="kpi-lbl">Código para {nuevo.nota} · solo se muestra ahora</span>
           <div className="invitacion-codigo num">{nuevo.codigo}</div>
-          <p>{mensaje}</p>
+          <p style={{ whiteSpace: "pre-line" }}>{mensaje}</p>
           <div className="metas-acciones">
             <button className="btn btn-primario" onClick={() => void copiar()}>
               {copiado ? "Mensaje copiado" : "Copiar mensaje para WhatsApp"}
