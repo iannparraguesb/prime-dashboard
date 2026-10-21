@@ -96,7 +96,7 @@ def rest(recurso, cuerpo=None, metodo="GET", prefer=None, extra=None):
             b = r.read()
             return json.loads(b) if b.strip() else {}
     except urllib.error.HTTPError as e:
-        raise SystemExit(f"Supabase {recurso} {e.code}: {e.read().decode()[:400]}")
+        raise RuntimeError(f"Supabase {recurso} {e.code}: {e.read().decode()[:400]}") from e
 
 
 def contar(recurso):
@@ -117,7 +117,7 @@ def upsert(tabla, filas, conflicto):
 def ultimo_snapshot():
     c = sorted((ROOT / "data/instagram").glob("engagement-*.json"))
     if not c:
-        raise SystemExit("No hay snapshots en data/instagram/. Corre tools/ig_dump.py primero.")
+        raise FileNotFoundError("No hay snapshots en data/instagram/. Corre tools/ig_dump.py primero.")
     return c[-1]
 
 
@@ -236,7 +236,7 @@ def main():
     sin = len(piezas) - clasificadas
     if args.reclasificar:
         if sin / max(len(piezas), 1) > 0.5:
-            raise SystemExit(f"--reclasificar rechazado: el lexico deja {sin / len(piezas):.0%} sin pilar. "
+            raise RuntimeError(f"--reclasificar rechazado: el lexico deja {sin / len(piezas):.0%} sin pilar. "
                              "Recalibra tools/ig_pilares.py (--verificar) antes de reemplazar.")
         ids = [p["id"] for p in piezas]
         for i in range(0, len(ids), LOTE):

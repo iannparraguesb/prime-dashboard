@@ -15,6 +15,11 @@ interface Cabecera {
   error?: string;
 }
 
+/** WhatsApp (https://wa.me/...) o un formulario. Se hornea en el build: sin la
+ *  variable no hay boton, para no mandar a nadie a un enlace muerto. */
+const URL_SOPORTE = (import.meta.env.VITE_SOPORTE_URL as string | undefined)?.trim();
+const SOPORTE = URL_SOPORTE && /^(https:|mailto:)/.test(URL_SOPORTE) ? URL_SOPORTE : null;
+
 const HOY = () => new Date().toLocaleDateString("es-CL", { day: "numeric", month: "short", year: "numeric" });
 
 /** "hoy", "ayer", "hace 3 días": la ingesta guarda una medicion por dia. */
@@ -73,6 +78,12 @@ export function BarraSuperior({ jwt, activa, etiqueta, tema, alternarTema, recar
       ) : <div />}
 
       <div className="barra-acciones">
+        {SOPORTE ? (
+          <a className="btn-soporte" href={SOPORTE} target="_blank" rel="noreferrer" aria-label="Soporte y feedback" title="Enviar feedback o pedir ayuda">
+            <Icono nombre="comentario" size={15} />
+            <span>Soporte</span>
+          </a>
+        ) : null}
         <span className="chip-fecha"><Icono nombre="calendario" size={13} /> {HOY()}</span>
         {activa ? (
           <span className="frescura-pill" data-tono={dias === null ? "mal" : dias <= 1 ? "bien" : dias <= 3 ? "ojo" : "mal"} title="Última medición de Instagram">

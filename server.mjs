@@ -522,7 +522,84 @@ async function construirAnalisis(jwt, seccion = "completo", cuentaId) {
   // mensaje y de tamano, asi que mezclarlo mide otra epoca.
   const enVentana = ranking.filter((f) => f.en_ventana === true);
   const nTotal = enVentana.length;
+  const cuenta = cuentas[0] ?? {};
   if (!ranking.length) {
+    if (cuenta.es_propia === false) {
+      const cfg = Object.fromEntries(config.map((f) => [f.clave, Number(f.valor)]));
+      const ultima = cuentaMetrica[0] ?? {};
+      const snapshot = "";
+      const base_por_formato = {};
+      const por_pilar = {};
+      for (const f of pilarRendimiento) {
+        if (!f.pilar) continue;
+        por_pilar[f.pilar] = {
+          n: aNumero(f.n) ?? 0,
+          guardado_pct_mediana: aPorcentaje(f.mediana_guardado),
+          compartido_pct_mediana: aPorcentaje(f.mediana_compartido),
+          alcance_mediano: aNumero(f.mediana_alcance),
+        };
+      }
+      por_pilar["Sin clasificar"] = {
+        n: 0,
+        guardado_pct_mediana: null,
+        compartido_pct_mediana: null,
+        alcance_mediano: null,
+      };
+      const correlaciones = {
+        like_pct_vs_guardado_pct: { rho: null, p: null, n: 0, nota: "muestra insuficiente para calcular correlacion" },
+        comentario_pct_vs_guardado_pct: { rho: null, p: null, n: 0, nota: "muestra insuficiente para calcular correlacion" },
+        alcance_vs_guardado_pct: { rho: null, p: null, n: 0, nota: "muestra insuficiente para calcular correlacion" },
+        nota:
+          "Rho de Spearman sobre las piezas que superan el piso de alcance. Se publica el numero " +
+          "que salio, no una intuicion. Un rho cercano a 0 significa que esa metrica NO predice el " +
+          "guardado: es un resultado, no un fallo del calculo.",
+      };
+      const hoy = Date.now();
+      const mesa = construirMesa([], cfg, hoy);
+
+      return {
+        generado: new Date().toISOString(),
+        cuenta: {
+          username: cuenta.username ?? null,
+          nombre: cuenta.nombre ?? null,
+          followers_count: aNumero(ultima.seguidores),
+          media_count: aNumero(ultima.publicaciones),
+          foto: null,
+          seguidores_historial: [...cuentaMetrica].reverse()
+            .filter((m) => aNumero(m.seguidores) !== null)
+            .map((m) => ({ fecha: m.fecha_snapshot, seguidores: aNumero(m.seguidores) })),
+        },
+        snapshot,
+        piso_alcance: cfg.piso_alcance ?? 500,
+        ventana_meses: cfg.ventana_meses ?? 12,
+        n_total: 0,
+        n_con_alcance: 0,
+        n_solidos: 0,
+        base_por_formato,
+        rankings: { todas: [] },
+        calendario: [],
+        por_pilar,
+        correlaciones,
+        efecto_palabra_clave: efectoPalabra.map((f) => ({
+          pide_palabra_clave: f.pide_palabra_clave ?? null,
+          n: aNumero(f.n),
+          guardado_pct_mediana: aPorcentaje(f.mediana_guardado),
+          alcance_mediano: aNumero(f.mediana_alcance),
+        })),
+        audiencia: construirAudiencia(audienciaFilas, ultima),
+        historias: {
+          ...construirHistorias(historiasFilas, historiasMetricas),
+          filas: [],
+          activas: 0,
+          capturadas: null,
+        },
+        competencia: construirCompetencia(cuentasTodas, piezasExternas, metricasCuenta, metricasExternas),
+        token: estadoToken(),
+        anuncios: construirAnuncios(anunciosFilas, campanasFilas),
+        mesa,
+        estado_sincronizacion: 'en_proceso',
+      };
+    }
     return {
       error: "Todavía no hay publicaciones disponibles para esta cuenta. Contacta al equipo si acabas de conectar Instagram.",
     };
@@ -661,14 +738,14 @@ async function construirAnalisis(jwt, seccion = "completo", cuentaId) {
   // `base_pct` era andamio del motivo de la mesa; no esta en el contrato.
   for (const p of piezas) delete p.base_pct;
 
-  const cuenta = cuentas[0] ?? {};
+  const cuentaObj = cuentas[0] ?? {};
   const ultima = cuentaMetrica[0] ?? {};
 
   return {
     generado: new Date().toISOString(),
     cuenta: {
-      username: cuenta.username ?? null,
-      nombre: cuenta.nombre ?? null,
+      username: cuentaObj.username ?? null,
+      nombre: cuentaObj.nombre ?? null,
       followers_count: aNumero(ultima.seguidores),
       media_count: aNumero(ultima.publicaciones),
       foto: null,

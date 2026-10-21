@@ -28,7 +28,12 @@ export function configuracion(env) {
     supabase: (env.SUPABASE_URL || "").replace(/\/+$/, ""), anon: env.SUPABASE_ANON_KEY, servicio: env.SUPABASE_SERVICE_KEY,
   };
   if (Object.values(c).some((v) => !v)) throw new HttpError(503, "La conexión con Instagram todavía no está habilitada.");
-  return c;
+  return {
+    ...c,
+    workflowToken: env.GH_WORKFLOW_TOKEN || env.GITHUB_TOKEN || "",
+    repo: env.GH_REPO || env.GITHUB_REPOSITORY || "",
+    ref: env.GH_WORKFLOW_REF || "main",
+  };
 }
 
 export const hashEstado = (estado) => crypto.createHash("sha256").update(estado).digest("hex");
@@ -107,6 +112,53 @@ export async function intercambiar(c, code, redirect) {
   };
 }
 
+/** Dispara la sincronización inmediata de Instagram (GitHub Actions workflow dispatch o script local en desarrollo). */
+export async function dispararSincronizacion(c, env = process.env) {
+  const token = c.workflowToken || env.GH_WORKFLOW_TOKEN || env.GITHUB_TOKEN || "";
+  const repo = c.repo || env.GH_REPO || env.GITHUB_REPOSITORY || "";
+  const ref = c.ref || env.GH_WORKFLOW_REF || "main";
+
+  if (token && repo) {
+    const url = `https://api.github.com/repos/${repo}/actions/workflows/sync-instagram.yml/dispatches`;
+    try {
+      const r = await fetch(url, {
+        method: "POST",
+        signal: AbortSignal.timeout(10000),
+        headers: {
+          authorization: `Bearer ${token}`,
+          accept: "application/vnd.github+json",
+          "content-type": "application/json",
+          "user-agent": "prime-dashboard-contenido",
+          "x-github-api-version": "2022-11-28",
+        },
+        body: JSON.stringify({ ref }),
+      });
+      if (!r.ok) {
+        const texto = await r.text().catch(() => "");
+        console.error(JSON.stringify({ evento: "instagram_dispatch_error", status: r.status, body: texto.slice(0, 200) }));
+      }
+    } catch (e) {
+      console.error(JSON.stringify({ evento: "instagram_dispatch_exception", error: e?.message }));
+    }
+  } else {
+    try {
+      const { exec } = await import("node:child_process");
+      const path = await import("node:path");
+      const workflowDir = path.resolve(process.cwd(), "ingesta");
+      exec("python3 tools/ig_historias.py && python3 tools/ig_dump.py --solo piezas --limite 25 && python3 tools/ig_a_supabase.py --miniaturas && python3 tools/ig_alumnos.py", {
+        cwd: workflowDir,
+        timeout: 300000,
+      }, (error, stdout, stderr) => {
+        if (error) {
+          console.error(JSON.stringify({ evento: "instagram_local_sync_error", error: error.message }));
+        }
+      });
+    } catch (e) {
+      console.error(JSON.stringify({ evento: "instagram_local_sync_exception", error: e?.message }));
+    }
+  }
+}
+
 export async function rutaInstagram(req, res, user, ruta, env) {
   const c = configuracion(env);
   if (user.tipo !== "alumno") throw new HttpError(400, "Las cuentas del equipo no conectan Instagram desde aquí.");
@@ -130,6 +182,10 @@ export async function rutaInstagram(req, res, user, ruta, env) {
       p_workspace: estado.workspace_id, p_usuario: user.id, p_ig: conexion.igUserId, p_username: conexion.username,
       p_tipo: conexion.tipo, p_token: conexion.token, p_expira: conexion.expira, p_scopes: conexion.permisos,
     }, { servicio: true });
+
+    // Iniciar ingesta inmediatamente sin esperar el cron ni bloquear la respuesta HTTP
+    dispararSincronizacion(c, env).catch(() => {});
+
     return json(res, { ok: true, username: conexion.username });
   }
 

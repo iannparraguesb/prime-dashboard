@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useApi } from '../hooks/useApi';
 import { ReelCard } from '../components/ReelCard';
-import { Vista, EsqueletoGrilla } from '../components/states';
+import { Vista, EsqueletoGrilla, Sincronizando } from '../components/states';
 import { Base, Kpi } from '../components/ui';
 import type { Analisis, Pieza, Rol } from '../tipos';
 
@@ -16,7 +16,10 @@ export function Piezas({d,rol,jwt}:{d:Analisis;rol:Rol;jwt:string|null}) {
   const params = new URLSearchParams({...f,solidas:String(f.solidas),pagina:String(f.pagina)});
   const query=params.toString();
   useEffect(()=>{window.history.replaceState(null,'',`?${query}#piezas`);},[query]);
-  const estado=useApi<Catalogo>(`/api/catalogo?${query}`,jwt);
+  // Mientras llega la primera sincronizacion no hay catalogo que pedir.
+  const sincronizando=d.estado_sincronizacion==='en_proceso';
+  const estado=useApi<Catalogo>(`/api/catalogo?${query}`,sincronizando?null:jwt);
+  if(sincronizando)return <Sincronizando />;
   return <>
     <div className="card filtros">
       <label className="filtro-grupo">Buscar publicación<input className="control" value={busqueda} maxLength={100} onChange={e=>setBusqueda(e.target.value)} placeholder="Busca en el texto" /></label>

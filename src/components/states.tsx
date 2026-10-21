@@ -115,6 +115,21 @@ export function SinDatosSeccion({ titulo, porque }: { titulo: string; porque: st
   );
 }
 
+/** Primer ingreso de un alumno: la cuenta ya esta conectada pero la ingesta
+ *  todavia no trajo nada. No es un error ni un vacio: es una espera. */
+export function Sincronizando({ detalle }: { detalle?: string }) {
+  return (
+    <div className="card estado" data-tipo="sincronizando" role="status">
+      <div className="estado-icono">
+        <Icono nombre="refrescar" size={20} />
+      </div>
+      <h3>Sincronizando tu Instagram</h3>
+      <p>Estamos trayendo tus publicaciones de Instagram por primera vez. Esto puede tomar unos minutos.</p>
+      {detalle ? <p>{detalle}</p> : null}
+    </div>
+  );
+}
+
 /**
  * El arbol de decision, en un solo lugar. Cada vista lo consume en vez de
  * reimplementarlo (y equivocar el orden).

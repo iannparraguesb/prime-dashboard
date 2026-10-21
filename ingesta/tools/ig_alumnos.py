@@ -153,12 +153,18 @@ def main():
             publico = ("Tu conexión venció. Vuelve a conectar Instagram." if e.token_muerto
                        else "No pudimos actualizar tus datos. Lo reintentamos en una hora.")
             print(f"  ! @{con.get('username')}: {publico} (code {e.code})", file=sys.stderr)
-            rpc("registrar_sincronizacion", {"p_conexion": con["conexion_id"], "p_ok": False, "p_error": publico})
+            try:
+                rpc("registrar_sincronizacion", {"p_conexion": con["conexion_id"], "p_ok": False, "p_error": publico})
+            except Exception:
+                print(f"  ! @{con.get('username')}: no se pudo registrar el fallo en Supabase", file=sys.stderr)
         except Exception as e:  # noqa: BLE001  un alumno no frena a los demas
             fallos += 1
-            print(f"  ! @{con.get('username')}: {type(e).__name__}", file=sys.stderr)
-            rpc("registrar_sincronizacion", {"p_conexion": con["conexion_id"], "p_ok": False,
-                                             "p_error": "No pudimos actualizar tus datos. Lo reintentamos en una hora."})
+            print(f"  ! @{con.get('username')}: {type(e).__name__}: {e}", file=sys.stderr)
+            try:
+                rpc("registrar_sincronizacion", {"p_conexion": con["conexion_id"], "p_ok": False,
+                                                 "p_error": "No pudimos actualizar tus datos. Lo reintentamos en una hora."})
+            except Exception:
+                print(f"  ! @{con.get('username')}: no se pudo registrar el fallo en Supabase", file=sys.stderr)
         finally:
             ig.TOKEN = None
     if fallos:

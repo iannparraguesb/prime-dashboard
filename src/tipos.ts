@@ -269,6 +269,9 @@ export interface Analisis {
   };
   competencia: { cuentas: Record<string, CuentaCompetencia>; nota: string };
   mesa: { propuestas: Propuesta[]; criterio: string };
+  /** Cuenta de alumno ya conectada a la que la ingesta todavia no le trajo
+   *  publicaciones: el resto del objeto viene vacio a proposito. */
+  estado_sincronizacion?: "en_proceso";
   /** Presente solo cuando el backend todavia no tiene datos. */
   error?: string;
   comando?: string;

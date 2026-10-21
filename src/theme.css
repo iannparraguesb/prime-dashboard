@@ -536,6 +536,13 @@ th.n {
   color: var(--mal);
   border-color: rgba(210, 96, 63, 0.45);
 }
+/* Primera sincronizacion: una espera, no un fallo. El icono gira despacio. */
+.estado[data-tipo="sincronizando"] .estado-icono svg {
+  animation: girar 2.4s linear infinite;
+}
+@keyframes girar {
+  to { transform: rotate(360deg); }
+}
 .comando {
   font-family: var(--mono);
   font-size: 12.5px;
@@ -1892,6 +1899,28 @@ a.idea-origen:hover { color: var(--acento-claro); }
 .btn-icono:active:not(:disabled) { transform: scale(0.94); }
 .btn-icono:focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; }
 .btn-icono:disabled { opacity: 0.5; cursor: progress; }
+.btn-soporte {
+  display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 14px;
+  font-size: 12.5px; font-weight: 600; color: var(--texto); text-decoration: none;
+  border: 1px solid color-mix(in srgb, var(--prime-gold) 45%, transparent); border-radius: 999px;
+  background: color-mix(in srgb, var(--prime-gold) 10%, var(--superficie));
+  transition: background-color var(--transicion);
+}
+.btn-soporte > svg { color: var(--acento); }
+.btn-soporte:hover { background: color-mix(in srgb, var(--prime-gold) 18%, var(--superficie)); }
+.btn-soporte:focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; }
+
+/* Bienvenida del alumno, arriba del Dashboard hasta que la cierra */
+.card.bienvenida {
+  display: flex; align-items: flex-start; gap: var(--e3); padding: var(--e4) var(--e5);
+  background: color-mix(in srgb, var(--prime-gold) 7%, var(--superficie));
+  border: 1px solid color-mix(in srgb, var(--prime-gold) 30%, transparent);
+}
+.bienvenida > svg { color: var(--acento); flex-shrink: 0; margin-top: 2px; }
+.bienvenida > div { flex: 1; min-width: 0; }
+.bienvenida h2 { font-size: 15px; margin: 0 0 4px; }
+.bienvenida p { margin: 0; color: var(--texto-2); font-size: 13.5px; line-height: 1.6; max-width: 82ch; }
+.bienvenida .btn { flex-shrink: 0; }
 
 .aviso-global {
   display: flex; align-items: center; gap: var(--e3); margin-bottom: var(--e5);
@@ -1966,7 +1995,13 @@ a.idea-origen:hover { color: var(--acento-claro); }
   .barra-stats { display: none; }
   .barra-sup { grid-template-columns: 1fr auto; }
 }
-@container principal (max-width: 560px) { .frescura-pill { display: none; } }
+@container principal (max-width: 560px) {
+  .frescura-pill { display: none; }
+  /* Solo el icono: el nombre accesible queda en aria-label. */
+  .btn-soporte { width: 36px; padding: 0; justify-content: center; }
+  .btn-soporte span { display: none; }
+  .bienvenida { flex-wrap: wrap; }
+}
 
 /* ==========================================================================
    Look Moka (2026-10-19): base neutra casi blanca, tarjetas blancas, sombras

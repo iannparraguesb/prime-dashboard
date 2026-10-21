@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { SinDatosSeccion } from "../components/states";
+import { SinDatosSeccion, Sincronizando } from "../components/states";
 import { Base, Nota, compacto, horaCorta, num, pct, NADA } from "../components/ui";
 import { GraficoBarras } from "../components/GraficoBarras";
 import { Icono } from "../components/icons";
@@ -21,6 +21,10 @@ export function Historias({ d }: { d: Analisis }) {
   const secuencias = useMemo(() => armarSecuencias(h.filas, new Date()), [h.filas]);
   const resumen = useMemo(() => resumirSecuencias(secuencias), [secuencias]);
   const [elegida, setElegida] = useState<string | null>(null);
+
+  if (d.estado_sincronizacion === "en_proceso" && !h.filas.length) {
+    return <Sincronizando detalle="Las historias aparecen después: se capturan mientras siguen activas en Instagram." />;
+  }
 
   if (h.error) {
     return (

@@ -4,6 +4,7 @@ import { Delta, NADA, NOMBRE_FORMATO, num, compacto, pct } from "../components/u
 import { GraficoBarras } from "../components/GraficoBarras";
 import { MetasMes } from "../components/MetasMes";
 import { Icono, type NombreIcono } from "../components/icons";
+import { Sincronizando } from "../components/states";
 import { useApi } from "../hooks/useApi";
 import { Calendario } from "./Calendario";
 import type { Analisis, FilaCalendario, Numerico } from "../tipos";
@@ -61,6 +62,15 @@ export function Resumen({ d, equipo = true, jwt = null, admin = false }: { d: An
   const grafico = useMemo(() => agrupar(actual, dias, ahora), [actual, dias, ahora]);
   const propuesta = d.mesa.propuestas[0];
 
+  if (d.estado_sincronizacion === "en_proceso" && !filas.length) {
+    return (
+      <div className="lista" style={{ gap: "var(--e5)" }}>
+        {!equipo ? <Bienvenida /> : null}
+        <Sincronizando />
+      </div>
+    );
+  }
+
   const selector = (
     <select className="control dash-periodo" value={dias} onChange={(e) => setDias(Number(e.target.value))} aria-label="Periodo">
       {[7, 30, 90].map((n) => <option key={n} value={n}>Últimos {n} días</option>)}
@@ -70,6 +80,7 @@ export function Resumen({ d, equipo = true, jwt = null, admin = false }: { d: An
   return (
     <div className="dash">
       {ancla ? createPortal(selector, ancla) : <div className="neg-cabecera">{selector}</div>}
+      {!equipo ? <Bienvenida /> : null}
 
       <div className="dash-main">
         <div className="kpis dash-kpis">
@@ -184,6 +195,39 @@ export function Resumen({ d, equipo = true, jwt = null, admin = false }: { d: An
         <Calendario d={d} />
       </section>
     </div>
+  );
+}
+
+const CLAVE_BIENVENIDA = "prime-bienvenida-vista";
+
+/** Primer ingreso del alumno: como leer las dos metricas que mas va a mirar.
+ *  Sale hasta que la cierra. */
+function Bienvenida() {
+  const [visible, setVisible] = useState(() => {
+    try {
+      return localStorage.getItem(CLAVE_BIENVENIDA) !== "1";
+    } catch {
+      return true;
+    }
+  });
+  if (!visible) return null;
+  const cerrar = () => {
+    setVisible(false);
+    try { localStorage.setItem(CLAVE_BIENVENIDA, "1"); } catch { /* sin almacenamiento: vuelve a salir la proxima visita */ }
+  };
+  return (
+    <section className="card bienvenida dash-ancho" aria-labelledby="bienvenida-titulo">
+      <Icono nombre="info" size={18} />
+      <div>
+        <h2 id="bienvenida-titulo">Te damos la bienvenida a tu panel</h2>
+        <p>
+          <b>Alcance</b> son las cuentas distintas que vieron una publicación. <b>Guardados</b> son las que la guardaron
+          para volver a ella: la señal más clara de que les sirvió. Para comparar piezas de distinto tamaño, mira
+          la <b>tasa de guardado</b> (guardados sobre alcance).
+        </p>
+      </div>
+      <button className="btn" onClick={cerrar}>Entendido</button>
+    </section>
   );
 }
 
