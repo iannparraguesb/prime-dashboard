@@ -24,7 +24,7 @@ function Distribucion({
         <h2 style={{ fontSize: 18, marginBottom: "var(--e3)" }}>{titulo}</h2>
         <SinDatosSeccion
           titulo="Sin datos para este corte"
-          porque="La API no devolvio este desglose. Suele pasar cuando la cuenta no llega a 100 seguidores en la dimension pedida o cuando el permiso instagram_manage_insights no esta vigente."
+          porque="Instagram no entregó este desglose. Suele pasar cuando la cuenta no llega a 100 seguidores en esa dimensión, cuando la cuenta se conectó hace poco y aún no hay datos, o cuando el permiso de estadísticas ya no está vigente."
         />
       </section>
     );

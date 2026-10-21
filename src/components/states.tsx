@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Icono } from "./icons";
+import { Icono, type NombreIcono } from "./icons";
 import type { Estado } from "../hooks/useApi";
 
 /* ==========================================================================
@@ -126,6 +126,20 @@ export function Sincronizando({ detalle }: { detalle?: string }) {
       <h3>Sincronizando tu Instagram</h3>
       <p>Estamos trayendo tus publicaciones de Instagram por primera vez. Esto puede tomar unos minutos.</p>
       {detalle ? <p>{detalle}</p> : null}
+    </div>
+  );
+}
+
+/** Seccion que todavia no abre para este usuario. Dice que viene y que va a
+ *  hacer, en vez de esconderla o mostrar un error de permisos. */
+export function Pronto({ icono, titulo, texto }: { icono: NombreIcono; titulo: string; texto: string }) {
+  return (
+    <div className="card estado" data-tipo="pronto" role="status">
+      <div className="estado-icono">
+        <Icono nombre={icono} size={20} />
+      </div>
+      <h3>{titulo}</h3>
+      <p>{texto}</p>
     </div>
   );
 }

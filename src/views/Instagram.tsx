@@ -14,13 +14,18 @@ async function llamar(jwt: string | null, ruta: string, cuerpo: object = {}) {
   return d;
 }
 
-const VEMOS = [
-  ["perfil", "Tu perfil: usuario y seguidores"],
-  ["piezas", "Tus publicaciones, reels e historias"],
-  ["alcance", "Alcance, guardados, compartidos y comentarios"],
-  ["audiencia", "De dónde es tu audiencia (desde 100 seguidores)"],
+/** Los dos permisos que pide la conexion (SCOPES en backend/instagram.mjs),
+ *  contados como los va a leer el alumno. Los dos son de solo lectura. */
+const PERMISOS = [
+  ["perfil", "Ver tu perfil y tu contenido", "Usuario, seguidores, publicaciones, reels e historias."],
+  ["alcance", "Ver tus estadísticas", "Alcance, guardados, compartidos, comentarios y de dónde es tu audiencia (desde 100 seguidores)."],
 ] as const;
-const NO_HACEMOS = ["No publicamos nada por ti", "No leemos tus mensajes", "Nunca vemos tu contraseña"];
+const NO_HACEMOS = [
+  "No publica, edita ni borra nada",
+  "No comenta ni responde por ti",
+  "No lee tus mensajes directos",
+  "Nunca ve tu contraseña: entras directo en Instagram",
+];
 
 export function ConectarInstagram({ yo, jwt, recargar }: { yo: Yo; jwt: string | null; recargar: () => void }) {
   const [ocupado, setOcupado] = useState(false);
@@ -78,7 +83,7 @@ export function ConectarInstagram({ yo, jwt, recargar }: { yo: Yo; jwt: string |
           <div className="ig-icono" aria-hidden="true"><Icono nombre="imagen" size={22} /></div>
           <div className="ig-cuerpo">
             <h2>Conecta tu cuenta de Instagram</h2>
-            <p>Entras con tu propio Instagram, de forma segura. Solo pedimos permiso de lectura.</p>
+            <p>Te llevamos a Instagram para que entres con tu propia cuenta. La app pide solo permisos de lectura: lee tu información para mostrártela ordenada en tu dashboard y no puede cambiar nada en tu cuenta.</p>
             <button className="btn ig-boton" disabled={ocupado} onClick={() => void conectar()}>
               {ocupado ? "Abriendo Instagram…" : "Conectar con Instagram →"}
             </button>
@@ -88,11 +93,13 @@ export function ConectarInstagram({ yo, jwt, recargar }: { yo: Yo; jwt: string |
       )}
 
       <section className="card ig-permisos">
-        <h3><Icono nombre="info" size={14} /> Qué vemos</h3>
+        <h3><Icono nombre="info" size={14} /> {conectada ? "Lo que autorizaste" : "Lo que vas a autorizar"} en Instagram: solo lectura</h3>
         <div className="ig-grilla">
-          {VEMOS.map(([icono, t]) => <div key={t}><Icono nombre={icono} size={14} /> {t}</div>)}
+          {PERMISOS.map(([icono, t, detalle]) => (
+            <div key={t} className="ig-permiso"><Icono nombre={icono} size={14} /><span><b>{t}</b>{detalle}</span></div>
+          ))}
         </div>
-        <h3 style={{ marginTop: "var(--e4)" }}>Qué no hacemos</h3>
+        <h3 style={{ marginTop: "var(--e4)" }}>Lo que la app no hace</h3>
         <div className="ig-grilla">
           {NO_HACEMOS.map((t) => <div key={t}>✕ {t}</div>)}
         </div>

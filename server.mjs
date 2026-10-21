@@ -1305,7 +1305,7 @@ async function identidad(req) {
   return { jwt, id: user.id, email: user.email ?? null, tipo: "alumno", rol: "alumno", cuentaId: vigente?.instagram_user_id ?? null, conexion: vigente ?? conexiones[0] ?? null };
 }
 
-const SECCIONES_ALUMNO = new Set(["resumen", "calendario", "piezas", "historias"]);
+const SECCIONES_ALUMNO = new Set(["resumen", "calendario", "piezas", "historias", "audiencia"]);
 
 function yo(user) {
   const c = user.conexion;

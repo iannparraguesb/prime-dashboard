@@ -248,6 +248,17 @@ a {
 .nav button:active {
   transform: translateY(1px);
 }
+/* Seccion que el alumno ve en el menu pero que todavia no abre. */
+.nav-pronto {
+  margin-left: auto;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--acento);
+  background: color-mix(in srgb, var(--prime-gold) 14%, transparent);
+}
 .nav button[aria-current="true"] {
   background: var(--superficie-alta);
   border-color: var(--linea);
@@ -1822,6 +1833,9 @@ a.idea-origen:hover { color: var(--acento-claro); }
 .ig-grilla { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--e2); }
 .ig-grilla div { display: flex; align-items: center; gap: var(--e2); padding: var(--e3); border-radius: var(--radio-sm);
   background: var(--superficie-alta); font-size: 13px; color: var(--texto-2); }
+.ig-grilla .ig-permiso { align-items: flex-start; }
+.ig-permiso > svg { margin-top: 2px; flex-shrink: 0; }
+.ig-permiso b { display: block; color: var(--texto); font-weight: 600; }
 @media (max-width: 760px) { .ig-card { flex-direction: column; } }
 
 /* ==========================================================================
