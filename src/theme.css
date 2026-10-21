@@ -1600,6 +1600,38 @@ select.control {
 .neg-meta-barra { height: 10px; border-radius: 999px; background: var(--superficie-alta); overflow: hidden; }
 .neg-meta-barra span { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--prime-bronze), var(--prime-gold-bright)); }
 
+/* Metas mensuales: barra de avance con una marca donde deberia ir a hoy. */
+.metas-vacio { padding: var(--e4); display: flex; align-items: center; justify-content: space-between; gap: var(--e3); color: var(--texto-2); }
+.metas-cabecera { display: flex; align-items: baseline; gap: var(--e3); flex-wrap: wrap; margin-bottom: var(--e3); }
+.metas-cabecera .sec-titulo { margin: 0; }
+.metas-dia { color: var(--texto-3); font-size: 13px; margin-right: auto; }
+.metas-grilla { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: var(--e3); }
+.meta-item { padding: var(--e4); display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--e2); }
+.meta-top { display: flex; align-items: center; justify-content: space-between; gap: var(--e2); flex-wrap: wrap; }
+.meta-valor { font-size: 26px; font-weight: 300; line-height: 1.1; }
+.meta-valor small { font-size: 14px; color: var(--texto-3); }
+.meta-barra { position: relative; overflow: visible; }
+.meta-ritmo { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; border-radius: 1px; background: var(--texto-2); }
+.metas-editor { padding: var(--e4); display: grid; gap: var(--e3); margin-bottom: var(--e3); }
+.metas-campo { display: grid; grid-template-columns: minmax(160px, 1fr) minmax(120px, 200px); align-items: center; gap: var(--e3); font-size: 14px; }
+.metas-acciones { display: flex; gap: var(--e2); }
+
+/* Invitar alumnos */
+.invitar { padding: var(--e4); display: flex; align-items: flex-end; gap: var(--e3); flex-wrap: wrap; }
+.invitar .login-campo { flex: 1 1 260px; }
+.invitacion-nueva { padding: var(--e4); display: grid; gap: var(--e3); border-left: 3px solid var(--prime-gold); }
+.invitacion-nueva p { margin: 0; color: var(--texto-2); line-height: 1.6; }
+.invitacion-codigo { font-size: 32px; font-weight: 600; letter-spacing: 0.08em; font-variant-numeric: tabular-nums; }
+.login-ayuda { color: var(--texto-3); font-size: 12px; }
+.login-cambio {
+  margin-top: var(--e3); padding: var(--e2) 0; border: 0; background: none; cursor: pointer;
+  color: var(--texto-2); font: inherit; font-size: 13px; text-decoration: underline;
+  text-decoration-color: var(--linea-fuerte); text-underline-offset: 3px;
+}
+.login-cambio:hover:not(:disabled) { color: var(--texto); text-decoration-color: var(--acento); }
+.login-cambio:focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; border-radius: 2px; }
+.login-cambio:disabled { opacity: 0.5; cursor: not-allowed; }
+
 .neg-pendientes { padding: var(--e4); border-left: 3px solid var(--ojo); }
 .neg-pendientes ul { margin: var(--e2) 0 0; padding-left: 18px; display: grid; gap: 6px; }
 .neg-pendientes a { color: var(--texto); text-decoration: underline; text-decoration-color: var(--linea-fuerte); text-underline-offset: 3px; }
@@ -1935,3 +1967,90 @@ a.idea-origen:hover { color: var(--acento-claro); }
   .barra-sup { grid-template-columns: 1fr auto; }
 }
 @container principal (max-width: 560px) { .frescura-pill { display: none; } }
+
+/* ==========================================================================
+   Look Moka (2026-10-19): base neutra casi blanca, tarjetas blancas, sombras
+   que apenas se notan y grises frios. El dorado de Prime queda como acento
+   (navegacion activa, botones, graficos). Solo tema claro: el oscuro no cambia.
+   ========================================================================== */
+:root:not([data-theme="dark"]) {
+  --bg: #fbfbfd;
+  --superficie: #ffffff;
+  --superficie-alta: #f4f4f7;
+  --flotante: #ffffff;
+  --linea: #ececf0;
+  --linea-fuerte: #dcdce3;
+  --texto: #111111;
+  --texto-2: #4a4a54;
+  --texto-3: #6e6e78;
+  --brillo-1: transparent;
+  --brillo-2: transparent;
+  --grano: 0;
+  --radio: 14px;
+  --sombra: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 1px 2px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(0, 0, 0, 0.05);
+  --sombra-alta: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 2px 4px rgba(0, 0, 0, 0.05), 0 12px 28px rgba(0, 0, 0, 0.08);
+}
+:root:not([data-theme="dark"]) .lateral { background: var(--bg); }
+:root:not([data-theme="dark"]) .nav button[aria-current="true"] {
+  background: rgba(17, 17, 17, 0.05); border-color: transparent; box-shadow: none; color: var(--texto); font-weight: 600;
+}
+:root:not([data-theme="dark"]) .barra-sup { border-radius: 16px; background: color-mix(in srgb, #ffffff 92%, transparent); }
+:root:not([data-theme="dark"]) .kpi-lbl svg { background: #f4f4f7; }
+
+/* Menu como Moka: lista plana arriba; herramientas y ajustes abajo */
+.nav-abajo { margin-top: auto; padding-top: var(--e3); border-top: 1px solid var(--linea); }
+.nav-abajo + .rol { margin-top: 0; }
+.nav button.nav-mas { color: var(--texto-2); }
+.nav-mas .nav-flecha { margin-left: auto; transition: transform var(--transicion); }
+.nav-mas[aria-expanded="true"] .nav-flecha { transform: rotate(90deg); }
+.nav-sub button { padding-left: 40px; font-size: 13.5px; }
+
+/* Dashboard como Moka: columna principal + columna lateral fija */
+.cabecera { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--e4); }
+.cabecera-acciones { display: flex; gap: var(--e2); padding-top: 10px; }
+.cabecera-acciones:empty { display: none; }
+.dash-periodo { width: auto; min-width: 172px; }
+.dash { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: var(--e5); align-items: start; }
+.dash-main { display: grid; gap: var(--e5); min-width: 0; }
+.dash-lado { display: grid; gap: var(--e4); min-width: 0; }
+.dash-kpis { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.dash .top-grilla { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+.dash-ancho { grid-column: 1 / -1; min-width: 0; }
+/* KPI del Dashboard como Moka: icono arriba a la izquierda, la etiqueta usa todo el ancho */
+.dash-kpis .kpi { min-height: 0; }
+.dash-kpis .kpi-lbl { padding: 46px 0 0; min-height: 0; }
+.dash-kpis .kpi-lbl svg { top: 18px; left: 22px; right: auto; padding: 9px; }
+.dash-graficos { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: var(--e4); }
+.dash-grafico, .dash-bloque { padding: var(--e4) var(--e5) var(--e5); min-width: 0; }
+.dash-titulo { font-size: 16px; font-weight: 700; letter-spacing: -0.01em; margin: 0 0 var(--e3); }
+.dash-lado-card { padding: var(--e4) var(--e5); display: grid; gap: var(--e3); }
+.dash-lado-cab { display: flex; align-items: center; justify-content: space-between; gap: var(--e2); margin-bottom: var(--e2); }
+.dash-lado-cab .dash-titulo, .dash-lado-cab .kpi-lbl { margin: 0; min-height: 0; padding: 0; }
+.dash-enlace { font-size: 12.5px; color: var(--acento); text-decoration: none; border-radius: 4px; }
+.dash-enlace:hover { text-decoration: underline; text-underline-offset: 3px; }
+.dash-enlace:focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; }
+.dash-vacio { margin: 0; color: var(--texto-2); font-size: 13.5px; }
+.dash-sub { color: var(--texto-3); font-size: 12px; }
+.dash-fila {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--e3);
+  color: inherit; text-decoration: none; padding: 4px 0; border-radius: 6px;
+}
+.dash-fila span { display: block; font-size: 13.5px; }
+.dash-fila small { display: block; color: var(--texto-3); font-size: 11.5px; }
+.dash-fila strong { font-size: 15px; font-weight: 600; white-space: nowrap; }
+a.dash-fila:hover span { color: var(--acento); }
+a.dash-fila:focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; }
+.dash-dinero { min-height: 0; }
+.dash-dinero .kpi-val { color: var(--bien); }
+.meta-mini { display: grid; gap: 6px; }
+.meta-mini-fila { display: flex; justify-content: space-between; align-items: baseline; gap: var(--e2); font-size: 13.5px; }
+.meta-mini-fila strong { font-weight: 600; white-space: nowrap; }
+.meta-mini-fila small { color: var(--texto-3); font-weight: 400; }
+.meta-mini-atras { color: var(--mal); font-size: 12px; }
+.dash-fuentes { display: grid; gap: var(--e3); }
+.dash-fuente { display: grid; gap: 6px; }
+@container principal (max-width: 980px) {
+  .dash { grid-template-columns: 1fr; }
+  .dash-lado { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); align-items: start; }
+}
+@container principal (max-width: 560px) { .cabecera { flex-direction: column; } }

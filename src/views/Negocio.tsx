@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { SinDatosSeccion } from "../components/states";
-import { Badge, Delta, num, pct, NADA, haceCuanto } from "../components/ui";
+import { Badge, Base, Delta, NOMBRE_FORMATO, num, pct, NADA, haceCuanto } from "../components/ui";
 import { GraficoBarras } from "../components/GraficoBarras";
 import { Icono } from "../components/icons";
-import type { Analisis, Negocio as DatosNegocio, PeriodoNegocio, Numerico } from "../tipos";
+import { METRICAS_META, ritmoMeta, enviarMeta, type Meta, type MetricaMeta } from "../lib/metas";
+import type { Analisis, AtribucionVentas, Negocio as DatosNegocio, PeriodoNegocio, Numerico } from "../tipos";
 
 const ES = "es-CL";
 const usd = (v: Numerico | undefined) =>
@@ -21,7 +22,7 @@ const diaMes = (iso: string) => `${Number(iso.slice(8, 10))} ${MES_CORTO[Number(
 const COLOR_GASTO = "#5a8fd6";
 const COLOR_VENTA = "#c67c0e";
 
-export function Negocio({ d }: { d: Analisis }) {
+export function Negocio({ d, jwt, recargar }: { d: Analisis; jwt: string | null; recargar: () => void }) {
   const n = d.negocio;
   const [mesSel, setMesSel] = useState<string | null>(null);
 
@@ -50,6 +51,7 @@ export function Negocio({ d }: { d: Analisis }) {
       </div>
 
       <Kpis m={mes} previo={previo} />
+      <Metas n={n} m={mes} jwt={jwt} recargar={recargar} />
       <Pendientes n={n} />
 
       <section>
@@ -72,6 +74,7 @@ export function Negocio({ d }: { d: Analisis }) {
         </div>
       </section>
 
+      {n.atribucion ? <Atribucion a={n.atribucion} /> : null}
       <Embudo m={mes} />
       <Semanas semanas={n.semanas} />
       <Conciliacion n={n} />
@@ -121,14 +124,154 @@ function Kpis({ m, previo }: { m: PeriodoNegocio; previo: PeriodoNegocio | null 
   );
 }
 
+const METRICAS = Object.keys(METRICAS_META) as MetricaMeta[];
+const decimal = (v: number) => v.toLocaleString(ES, { maximumFractionDigits: 1 });
+const valorMeta = (k: MetricaMeta, v: number) => (METRICAS_META[k].usd ? usd(v) : decimal(v));
+
+function Metas({ n, m, jwt, recargar }: { n: DatosNegocio; m: PeriodoNegocio; jwt: string | null; recargar: () => void }) {
+  const [editando, setEditando] = useState(false);
+  if (n.metas === null) {
+    return <Base>Las metas mensuales necesitan la migración 0015_metas_mensuales.sql aplicada en Supabase.</Base>;
+  }
+  const delMes = n.metas.filter((x) => x.mes === m.inicio).sort((a, b) => METRICAS.indexOf(a.metrica) - METRICAS.indexOf(b.metrica));
+  const { dia, dias, cerrado } = ritmoMeta(0, 1, m.inicio, n.hoy);
+  const editor = editando ? (
+    <EditorMetas mes={m.inicio} metas={delMes} jwt={jwt} alGuardar={() => { setEditando(false); recargar(); }} alCancelar={() => setEditando(false)} />
+  ) : null;
+
+  if (!delMes.length) {
+    return (
+      <section id="metas">
+        {editor ?? (
+          <div className="card metas-vacio">
+            <span>Sin metas para {nombreMes(m.inicio)}.</span>
+            <button className="btn" onClick={() => setEditando(true)}>Definir metas</button>
+          </div>
+        )}
+      </section>
+    );
+  }
+
+  return (
+    <section id="metas">
+      <div className="metas-cabecera">
+        <h2 className="sec-titulo">Metas de {nombreMes(m.inicio)}</h2>
+        <span className="metas-dia">{cerrado ? "Mes cerrado" : `Día ${dia} de ${dias} · ${pct((dia / dias) * 100, 0)} del mes`}</span>
+        {!editando ? <button className="btn" onClick={() => setEditando(true)}>Editar metas</button> : null}
+      </div>
+      {editor}
+      <div className="metas-grilla">
+        {delMes.map((meta) => <MetaItem key={meta.metrica} meta={meta} actual={m[meta.metrica]} hoy={n.hoy} />)}
+      </div>
+    </section>
+  );
+}
+
+const ESTADO_META = {
+  cumplida: { t: "Cumplida", tono: "bien" },
+  adelante: { t: "Adelante del ritmo", tono: "bien" },
+  atras: { t: "Por detrás del ritmo", tono: "mal" },
+  no_cumplida: { t: "No se cumplió", tono: "mal" },
+  sin_dato: { t: "Sin dato", tono: undefined },
+} as const;
+
+function MetaItem({ meta, actual, hoy }: { meta: Meta; actual: Numerico; hoy: string }) {
+  const k = meta.metrica;
+  const r = ritmoMeta(actual, meta.objetivo, meta.mes, hoy);
+  const e = ESTADO_META[r.estado];
+  let pie: string;
+  if (r.estado === "sin_dato") pie = "La fuente todavía no cubre este mes.";
+  else if (r.estado === "cumplida") pie = `Objetivo de ${valorMeta(k, meta.objetivo)} alcanzado.`;
+  else if (r.cerrado) pie = `Faltaron ${valorMeta(k, r.faltan ?? 0)}.`;
+  else pie = `Faltan ${valorMeta(k, r.faltan ?? 0)}${r.por_dia ? ` · ${valorMeta(k, r.por_dia)} por día` : ""} · a hoy tocaba ${valorMeta(k, r.esperado)}`;
+  return (
+    <div className="card meta-item">
+      <div className="meta-top">
+        <span className="kpi-lbl">{METRICAS_META[k].nombre}</span>
+        <Badge tono={e.tono}>{e.t}</Badge>
+      </div>
+      <div className="meta-valor num">
+        {actual === null ? NADA : valorMeta(k, actual)} <small>/ {valorMeta(k, meta.objetivo)}</small>
+      </div>
+      <div className="neg-meta-barra meta-barra" role="img" aria-label={`${pct(r.logrado, 0)} de la meta`}>
+        {r.logrado !== null ? <span style={{ width: `${Math.min(r.logrado, 100)}%` }} /> : null}
+        {!r.cerrado && r.estado !== "cumplida" ? <i className="meta-ritmo" style={{ left: `${Math.min((r.esperado / meta.objetivo) * 100, 100)}%` }} title="Donde deberías ir a hoy" /> : null}
+      </div>
+      <div className="kpi-pie">{pie}</div>
+    </div>
+  );
+}
+
+function EditorMetas({ mes, metas, jwt, alGuardar, alCancelar }: {
+  mes: string; metas: Meta[]; jwt: string | null; alGuardar: () => void; alCancelar: () => void;
+}) {
+  const [valores, setValores] = useState<Record<MetricaMeta, string>>(
+    () => Object.fromEntries(METRICAS.map((k) => [k, String(metas.find((x) => x.metrica === k)?.objetivo ?? "")])) as Record<MetricaMeta, string>,
+  );
+  const [ocupado, setOcupado] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const guardar = async () => {
+    setOcupado(true);
+    setError(null);
+    try {
+      for (const k of METRICAS) {
+        const texto = valores[k].trim();
+        const previa = metas.find((x) => x.metrica === k);
+        // Vaciar el campo quita la meta: una meta en cero no existe.
+        if (!texto) {
+          if (previa) await enviarMeta(jwt, "DELETE", { mes, metrica: k });
+          continue;
+        }
+        const v = Number(texto);
+        if (!Number.isFinite(v) || v <= 0) throw new Error(`${METRICAS_META[k].nombre}: el objetivo tiene que ser mayor que cero.`);
+        if (previa?.objetivo !== v) await enviarMeta(jwt, "POST", { mes, metrica: k, objetivo: v });
+      }
+      alGuardar();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudieron guardar las metas.");
+    } finally {
+      setOcupado(false);
+    }
+  };
+
+  return (
+    <div className="card metas-editor">
+      <span className="kpi-lbl">Metas de {nombreMes(mes)} · deja vacío lo que no quieras medir</span>
+      {METRICAS.map((k) => (
+        <label key={k} className="metas-campo">
+          <span>{METRICAS_META[k].nombre}{METRICAS_META[k].usd ? " (US$)" : ""}</span>
+          <input
+            className="control"
+            type="number"
+            inputMode="decimal"
+            min={0}
+            step="any"
+            value={valores[k]}
+            onChange={(e) => setValores((v) => ({ ...v, [k]: e.target.value }))}
+            disabled={ocupado}
+          />
+        </label>
+      ))}
+      {error ? <p className="login-error" role="alert">{error}</p> : null}
+      <div className="metas-acciones">
+        <button className="btn btn-primario" disabled={ocupado} onClick={() => void guardar()}>{ocupado ? "Guardando…" : "Guardar metas"}</button>
+        <button className="btn" disabled={ocupado} onClick={alCancelar}>Cancelar</button>
+      </div>
+    </div>
+  );
+}
+
 function Pendientes({ n }: { n: DatosNegocio }) {
   const conflictos = n.conciliacion.filter((c) => !c.ok).length;
   const total = n.origen_agendas.reduce((s, o) => s + o.n, 0);
   const sinOrigen = n.origen_agendas.find((o) => o.nombre === "Sin UTM")?.n ?? 0;
   const sinFuente = n.llamadas.filter((l) => !l.fuente).length;
+  const sinPieza = n.atribucion ? n.atribucion.cobertura.ventas - n.atribucion.cobertura.con_pieza : 0;
   const items = [
     conflictos ? { t: `${conflictos} ventas no coinciden entre GHL y el registro de llamadas`, a: "#conciliacion" } : null,
     sinFuente ? { t: `${sinFuente} llamadas sin "de dónde vino" anotado`, a: "#llamadas" } : null,
+    sinPieza ? { t: `${sinPieza} ventas sin el link de la publicación o historia que las trajo`, a: "#atribucion" } : null,
     total && sinOrigen / total > 0.3 ? { t: `${sinOrigen} de ${total} agendas llegaron sin saber de qué anuncio o publicación`, a: "#agendas" } : null,
   ].filter(Boolean) as { t: string; a: string }[];
   if (!items.length) return null;
@@ -141,6 +284,85 @@ function Pendientes({ n }: { n: DatosNegocio }) {
         ))}
       </ul>
     </div>
+  );
+}
+
+/** Monto con los que faltan anotados al lado: un monto vacio no suma cero. */
+function facturado(ingresos: number, sinMonto: number) {
+  return `${usd(ingresos)}${sinMonto ? ` + ${sinMonto} sin monto` : ""}`;
+}
+
+function Atribucion({ a }: { a: AtribucionVentas }) {
+  const c = a.cobertura;
+  if (!c.ventas) return null;
+  const faltan = [
+    c.sin_detalle ? `${c.sin_detalle} sin nada anotado en "Detalle de la fuente"` : null,
+    c.sin_link ? `${c.sin_link} con texto pero sin link de Instagram` : null,
+    c.link_sin_pieza ? `${c.link_sin_pieza} con un link que no es de una publicación o historia capturada de la cuenta` : null,
+  ].filter(Boolean);
+  return (
+    <section id="atribucion">
+      <h2 className="sec-titulo">Qué contenido vendió</h2>
+      {a.por_pieza.length ? (
+        <div className="top-grilla">
+          {a.por_pieza.map((x, k) => <TarjetaVenta key={x.pieza.id} x={x} rango={k + 1} />)}
+        </div>
+      ) : (
+        <div className="card" style={{ padding: "var(--e5)", color: "var(--texto-2)" }}>
+          Ninguna venta tiene todavía la publicación o historia que la trajo. Para verlas acá, el registro de llamadas
+          necesita el link de Instagram del reel o la historia en la columna "Detalle de la fuente".
+        </div>
+      )}
+
+      <div className="tabla-caja" style={{ marginTop: "var(--e3)" }}>
+        <table>
+          <thead>
+            <tr>
+              <th>Fuente de la venta</th>
+              <th className="n">Ventas</th>
+              <th className="n">Facturado</th>
+            </tr>
+          </thead>
+          <tbody>
+            {a.por_fuente.map((f) => (
+              <tr key={f.fuente}>
+                <td>{f.fuente === "Sin anotar" ? <span style={{ color: "var(--texto-3)" }}>sin anotar</span> : f.fuente}</td>
+                <td className="n">{num(f.ventas)}</td>
+                <td className="n">{facturado(f.ingresos_usd, f.sin_monto)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <Base>
+        {num(c.con_pieza)} de {num(c.ventas)} ventas tienen identificada la pieza que las trajo.
+        {faltan.length ? ` Del resto: ${faltan.join("; ")}.` : ""} La pieza se reconoce por el link de Instagram que
+        anota el setter; no se adivina por el texto.
+      </Base>
+    </section>
+  );
+}
+
+function TarjetaVenta({ x, rango }: { x: AtribucionVentas["por_pieza"][number]; rango: number }) {
+  const p = x.pieza;
+  const historia = p.tipo === "historia";
+  return (
+    <a className="top-pieza" href={p.permalink} target="_blank" rel="noreferrer">
+      <div className="top-media">
+        {p.thumb ? <img src={p.thumb} alt="" loading="lazy" /> : <span className="cal-sin-img" />}
+        <span className="top-rango">{rango}</span>
+        <span className="top-formato">{historia ? "Historia" : NOMBRE_FORMATO[p.formato ?? ""] ?? p.formato ?? ""}</span>
+      </div>
+      <div className="top-cuerpo">
+        <p>{historia ? `Historia del ${p.fecha ? diaMes(p.fecha.slice(0, 10)) : "día sin fecha"}` : p.titulo || "Sin texto"}</p>
+        <div className="top-mets">
+          <span title="Facturado"><Icono nombre="dinero" size={12} /> {facturado(x.ingresos_usd, x.sin_monto)}</span>
+          <span title="Ventas"><Icono nombre="perfil" size={12} /> {x.ventas === 1 ? "1 venta" : `${num(x.ventas)} ventas`}</span>
+        </div>
+        {!historia && p.fecha ? <small>{diaMes(p.fecha.slice(0, 10))}</small> : null}
+      </div>
+    </a>
   );
 }
 

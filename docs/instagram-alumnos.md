@@ -25,8 +25,30 @@ En vez de agregar `workspace_id` a todas las tablas, el aislamiento se resuelve 
 | Pruebas | `pruebas/alumnos-db.test.mjs` (13, PGlite), `pruebas/instagram.test.mjs` (9) |
 
 Variables de Vercel (solo Production, nunca `VITE_`): `IG_APP_ID`, `IG_APP_SECRET`,
-`IG_REDIRECT_URI=https://app.primeclubacademy.io/conectar/instagram`, `SUPABASE_SERVICE_KEY` (solo la usa
-`backend/instagram.mjs` para consumir el state y guardar la conexión).
+`IG_REDIRECT_URI=https://app.primeclubacademy.io/conectar/instagram`, `SUPABASE_SERVICE_KEY` (la usan
+`backend/instagram.mjs` para consumir el state y guardar la conexión, y `backend/registro.mjs` para crear la
+cuenta de un alumno con código).
+
+## Autoregistro con código de invitación (2026-10-19)
+
+El registro abierto de Supabase Auth **sigue desactivado** (`disable_signup: true`) y tiene que quedarse así:
+si se activa, cualquiera crea una cuenta y el servidor la trata como alumno.
+
+1. Un admin crea un código en **Ajustes → Alumnos** (`/api/invitaciones`). Se muestra una sola vez; en la base
+   queda solo su hash. Vence a los 14 días y se puede revocar mientras no se use.
+2. El alumno elige "Crear cuenta de alumno" en el login y envía correo, clave y código a `/api/registro`
+   (única ruta sin sesión, cuota de 5 intentos por minuto por IP).
+3. El servidor reserva el código de forma atómica, crea la cuenta confirmada con la API admin de Supabase y la
+   liga al código. Si crear la cuenta falla, libera la reserva; si se cae en el medio, la reserva caduca a los
+   5 minutos.
+4. Con la sesión iniciada el alumno cae en "Mi Instagram" y sigue el flujo de conexión de siempre.
+
+| Pieza | Dónde |
+|---|---|
+| Migración | `supabase/migrations/0016_invitaciones_alumnos.sql` |
+| Registro e invitaciones | `backend/registro.mjs` |
+| Pantallas | `src/components/Login.tsx` (modo registro), `src/views/Alumnos.tsx` |
+| Pruebas | `pruebas/invitaciones-db.test.mjs` (PGlite), `pruebas/registro.test.mjs` |
 
 Pendiente antes de abrir a todos: App Review de Meta, política de privacidad y callback de borrado de datos,
 miniaturas en bucket privado (A-04), re-auditoría con dos alumnos reales.
@@ -37,7 +59,7 @@ Permitir que cada alumno conecte una sola cuenta profesional de Instagram y vea 
 
 ## Flujo de producto
 
-1. Un administrador crea el workspace del alumno y su membresía por UUID de Supabase Auth.
+1. El alumno crea su cuenta con un código de invitación (ver arriba) o un admin la crea a mano en Supabase Auth.
 2. El alumno entra a Configuración → Instagram y pulsa **Conectar Instagram**.
 3. El backend valida sesión y membresía, crea un `state` aleatorio de un solo uso, guarda únicamente su hash con TTL de 10 minutos y redirige a Meta OAuth.
 4. Meta vuelve al callback permitido. El backend consume el `state` atómicamente, intercambia el código, descubre la cuenta Business/Creator y comprueba que no esté conectada a otro workspace.

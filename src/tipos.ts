@@ -178,6 +178,30 @@ export interface PeriodoNegocio {
 
 export interface CoberturaFuente { desde: string; hasta: string; cargado_en: string; nota: string | null }
 
+/** Pieza propia a la que el setter atribuyo una venta pegando su link. */
+export interface PiezaVendedora {
+  tipo: "publicacion" | "historia";
+  id: string;
+  permalink: string;
+  fecha: string | null;
+  formato: string | null;
+  titulo: string;
+  thumb: string | null;
+}
+
+/** Suma de ventas de un grupo. Los montos sin anotar se cuentan en `sin_monto`, no como cero. */
+interface SumaVentas { ventas: number; ingresos_usd: number; sin_monto: number }
+
+export interface AtribucionVentas {
+  cobertura: { ventas: number; con_pieza: number; link_sin_pieza: number; sin_link: number; sin_detalle: number };
+  por_pieza: (SumaVentas & { pieza: PiezaVendedora })[];
+  por_fuente: (SumaVentas & { fuente: string })[];
+  ventas: {
+    fecha: string; prospecto: string; fuente: string | null; monto_usd: Numerico;
+    estado: "con_pieza" | "link_sin_pieza" | "sin_link" | "sin_detalle"; pieza: PiezaVendedora | null;
+  }[];
+}
+
 export interface Negocio {
   hoy: string;
   cobertura: Record<"meta" | "ghl" | "setter" | "dolar", CoberturaFuente | null>;
@@ -189,6 +213,9 @@ export interface Negocio {
   fuente_leads: { nombre: string; n: number }[];
   etapas: { nombre: string; n: number }[];
   fuente_llamadas: { nombre: string; n: number }[];
+  /** null = falta la migracion 0015; [] = no hay metas cargadas. */
+  metas: { mes: string; metrica: "ingresos_usd" | "ventas" | "agendas" | "asistieron" | "conversaciones"; objetivo: number }[] | null;
+  atribucion: AtribucionVentas;
   conciliacion: {
     prospecto: string; ghl_etapa: string | null; ghl_fecha: string | null; ghl_valor: Numerico; ghl_moneda: "CLP" | "USD" | null; ghl_valor_usd: Numerico;
     setter_resultado: string | null; setter_asistio: string | null; setter_monto_usd: Numerico; estado: string; ok: boolean;

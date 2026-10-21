@@ -17,32 +17,32 @@ const Competencia = lazy(() => import("./views/Competencia").then(m => ({ defaul
 const Audiencia = lazy(() => import("./views/Audiencia").then(m => ({ default: m.Audiencia })));
 const Anuncios = lazy(() => import("./views/Anuncios").then(m => ({ default: m.Anuncios })));
 const Negocio = lazy(() => import("./views/Negocio").then(m => ({ default: m.Negocio })));
+const Alumnos = lazy(() => import("./views/Alumnos").then(m => ({ default: m.Alumnos })));
 const Mesa = lazy(() => import("./views/Mesa").then(m => ({ default: m.Mesa })));
 import type { Analisis, Rol } from "./tipos";
 
-type Seccion = "resumen" | "calendario" | "piezas" | "palabra-clave" | "historias" | "competencia" | "audiencia" | "anuncios" | "mesa" | "negocio" | "instagram";
+type Seccion = "resumen" | "calendario" | "piezas" | "palabra-clave" | "historias" | "competencia" | "audiencia" | "anuncios" | "mesa" | "negocio" | "instagram" | "alumnos";
 
 const SECCIONES: { id: Seccion; texto: string; icono: NombreIcono; pregunta: string }[] = [
-  { id: "resumen", texto: "Resumen", icono: "resumen", pregunta: "Cómo le está yendo a tu cuenta." },
+  { id: "resumen", texto: "Dashboard", icono: "resumen", pregunta: "Resumen global de tu marca personal." },
   { id: "calendario", texto: "Calendario", icono: "calendario", pregunta: "Todo lo que publicaste, día por día." },
   { id: "piezas", texto: "Publicaciones", icono: "piezas", pregunta: "Qué funcionó de verdad. Busca, filtra y ordena." },
   { id: "historias", texto: "Historias", icono: "historias", pregunta: "Qué historia retuvo y llevó gente al perfil." },
-  { id: "audiencia", texto: "Audiencia", icono: "audiencia", pregunta: "Quién te sigue y desde dónde." },
-  { id: "negocio", texto: "Negocio", icono: "dinero", pregunta: "Cuánto vendiste y cuánto costó conseguirlo." },
+  { id: "audiencia", texto: "Tu audiencia", icono: "audiencia", pregunta: "Quién te sigue y desde dónde." },
+  { id: "negocio", texto: "Ventas", icono: "dinero", pregunta: "Cuánto vendiste, de dónde vino y cuánto costó conseguirlo." },
   { id: "anuncios", texto: "Anuncios", icono: "megafono", pregunta: "Cuánto cuesta cada conversación y qué creativo la trae." },
   { id: "mesa", texto: "Mesa de trabajo", icono: "idea", pregunta: "Ideas para tu próxima publicación." },
-  { id: "competencia", texto: "Competencia", icono: "competencia", pregunta: "Lo que publica tu competencia y qué le funciona." },
+  { id: "competencia", texto: "Espía", icono: "competencia", pregunta: "Lo que publica tu competencia y qué le funciona." },
   { id: "palabra-clave", texto: "Palabra clave", icono: "etiqueta", pregunta: "Qué pasa cuando pides comentar una palabra." },
   { id: "instagram", texto: "Mi Instagram", icono: "imagen", pregunta: "Tu cuenta conectada y qué datos vemos." },
+  { id: "alumnos", texto: "Alumnos", icono: "perfil", pregunta: "Quién puede crear su cuenta en el panel." },
 ];
 
-/** Menu agrupado: la cuenta, el negocio y lo que hace crecer. */
-const GRUPOS: { titulo: string; ids: Seccion[] }[] = [
-  { titulo: "Tu cuenta", ids: ["resumen", "calendario", "piezas", "historias", "audiencia"] },
-  { titulo: "Negocio", ids: ["negocio", "anuncios"] },
-  { titulo: "Crecer", ids: ["mesa", "competencia", "palabra-clave"] },
-  { titulo: "Ajustes", ids: ["instagram"] },
-];
+/** Menu como el de Moka: una lista plana con lo de todos los dias; abajo, las
+ *  herramientas de consulta ocasional y los ajustes. */
+const PRINCIPAL: Seccion[] = ["resumen", "piezas", "historias", "competencia", "audiencia", "negocio", "anuncios", "mesa"];
+const HERRAMIENTAS: Seccion[] = ["calendario", "palabra-clave"];
+const AJUSTES: Seccion[] = ["alumnos", "instagram"];
 
 /** Lo que ve un alumno: su contenido y su conexion. Nada del negocio de Leo. */
 const DEL_ALUMNO: Seccion[] = ["resumen", "calendario", "piezas", "historias", "instagram"];
@@ -58,6 +58,7 @@ export default function App() {
   const { tema, alternar } = useTema();
 
   const [rol, setRol] = useState<Rol>("direccion");
+  const [verMasManual, setVerMas] = useState(false);
   const [seccion, setSeccion] = useState<Seccion>(() => {
     const value = window.location.hash.slice(1);
     return SECCIONES.some(s=>s.id===value) ? value as Seccion : "resumen";
@@ -69,10 +70,15 @@ export default function App() {
   const { yo, error: errorYo, recargar: recargarYo } = useYo(jwt);
   const esAlumno = yo?.tipo === "alumno";
   const conectado = !!yo?.instagram && ["activa", "vencida", "error"].includes(yo.instagram.estado);
-  const permitida = (id: Seccion) => (esAlumno ? DEL_ALUMNO.includes(id) : id !== "instagram");
+  // Invitar alumnos es solo de admin: el resto del equipo ni ve la entrada.
+  const permitida = (id: Seccion) => (esAlumno ? DEL_ALUMNO.includes(id) : id !== "instagram" && (id !== "alumnos" || yo?.rol === "admin"));
   // Un alumno sin Instagram conectado no tiene datos que mostrar: va directo a conectar.
-  const vista: Seccion = esAlumno && (!conectado || !DEL_ALUMNO.includes(seccion)) ? (conectado ? "resumen" : "instagram") : seccion;
-  const estado = useApi<Analisis>(`/api/analisis?seccion=${vista}`, yo && vista !== "instagram" ? jwt : null);
+  const vista: Seccion = esAlumno
+    ? (!conectado ? "instagram" : DEL_ALUMNO.includes(seccion) ? seccion : "resumen")
+    : permitida(seccion) ? seccion : "resumen";
+  // Estas dos vistas no leen /api/analisis: cada una trae lo suyo.
+  const sinAnalisis = vista === "instagram" || vista === "alumnos";
+  const estado = useApi<Analisis>(`/api/analisis?seccion=${vista}`, yo && !sinAnalisis ? jwt : null);
   const elegir = (id: Seccion) => { setSeccion(id); window.history.replaceState(null,"",`#${id}`); window.scrollTo({ top: 0 }); };
 
   // Puerta de entrada. `cargando` sin sesion es el arranque: preguntarle a
@@ -90,6 +96,17 @@ export default function App() {
   if (!yo) return <div className="login"><div className="esq" style={{ width: 360, height: 300 }} /></div>;
 
   const actual = SECCIONES.find((x) => x.id === vista)!;
+  // Si estas dentro de una herramienta, su grupo queda abierto.
+  const verMas = verMasManual || HERRAMIENTAS.includes(vista);
+  const boton = (id: Seccion) => {
+    const x = SECCIONES.find((y) => y.id === id)!;
+    return (
+      <button key={id} aria-current={vista === id} onClick={() => elegir(id)}>
+        <Icono nombre={x.icono} size={17} />
+        {x.texto}
+      </button>
+    );
+  };
   const ig = yo.instagram;
   const reconectar = esAlumno && ig && (ig.estado === "vencida" || ig.estado === "error");
 
@@ -105,24 +122,21 @@ export default function App() {
         </div>
 
         <div className="nav">
-          {GRUPOS.map((g) => {
-            const items = g.ids.filter(permitida);
-            if (!items.length) return null;
-            return (
-              <div className="nav-grupo" key={g.titulo}>
-                <span className="nav-titulo">{g.titulo}</span>
-                {items.map((id) => {
-                  const x = SECCIONES.find((y) => y.id === id)!;
-                  return (
-                    <button key={id} aria-current={vista === id} onClick={() => elegir(id)}>
-                      <Icono nombre={x.icono} size={17} />
-                      {x.texto}
-                    </button>
-                  );
-                })}
-              </div>
-            );
-          })}
+          <div className="nav-grupo">{PRINCIPAL.filter(permitida).map(boton)}</div>
+        </div>
+
+        <div className="nav nav-abajo">
+          {HERRAMIENTAS.some(permitida) ? (
+            <div className="nav-grupo">
+              <button className="nav-mas" aria-expanded={verMas} onClick={() => setVerMas((v) => !v)}>
+                <Icono nombre="herramientas" size={17} />
+                Más herramientas
+                <span className="nav-flecha"><Icono nombre="chevron" size={14} /></span>
+              </button>
+              {verMas ? <div className="nav-sub">{HERRAMIENTAS.filter(permitida).map(boton)}</div> : null}
+            </div>
+          ) : null}
+          <div className="nav-grupo">{AJUSTES.filter(permitida).map(boton)}</div>
         </div>
 
         <div className="rol">
@@ -168,14 +182,18 @@ export default function App() {
             <h1>{actual.texto}</h1>
             <p>{actual.pregunta}</p>
           </div>
+          {/* Cada vista puede poner aca sus controles (p. ej. el periodo del Dashboard). */}
+          <div className="cabecera-acciones" id="cabecera-acciones" />
         </header>
 
-        {vista === "instagram" ? <ConectarInstagram yo={yo} jwt={jwt} recargar={recargarYo} /> : (
+        {vista === "instagram" ? <ConectarInstagram yo={yo} jwt={jwt} recargar={recargarYo} /> : vista === "alumnos" ? (
+          <Suspense fallback={<EsqueletoGrilla />}><Alumnos jwt={jwt} /></Suspense>
+        ) : (
         <Suspense fallback={<EsqueletoGrilla />}><Vista estado={estado} esqueleto={vista === "piezas" ? <EsqueletoGrilla /> : undefined}>
           {(d) => {
             switch (vista) {
               case "resumen":
-                return <Resumen d={d} equipo={!esAlumno} />;
+                return <Resumen d={d} equipo={!esAlumno} jwt={jwt} admin={!esAlumno && yo.rol === "admin"} />;
               case "calendario":
                 return <Calendario d={d} />;
               case "piezas":
@@ -191,7 +209,7 @@ export default function App() {
               case "anuncios":
                 return <Anuncios d={d} />;
               case "negocio":
-                return <Negocio d={d} />;
+                return <Negocio key={s.sesion?.user.id} d={d} jwt={jwt} recargar={estado.recargar} />;
               case "mesa":
                 return <Mesa key={s.sesion?.user.id} d={d} jwt={jwt} />;
             }

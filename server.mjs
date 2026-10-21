@@ -27,6 +27,8 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { HttpError, json, readBody, textField, uuid, rateLimit, reportError } from "./backend/security.mjs";
 import { sugerencias } from "./backend/ideas.mjs";
 import { rutaInstagram } from "./backend/instagram.mjs";
+import { atribuirVentas, claveInstagram } from "./backend/atribucion.mjs";
+import { registrarAlumno, rutaInvitaciones } from "./backend/registro.mjs";
 
 const AQUI = path.dirname(fileURLToPath(import.meta.url));
 const RAIZ = path.resolve(AQUI, "..", "..");
@@ -105,7 +107,7 @@ const MAX_FILAS = 10000;
 /** Trae una tabla o vista completa, paginando por Range para no depender del
  *  limite de filas que tenga configurado el proyecto. */
 async function traer(recurso, consulta = "select=*", jwt = null) {
-  const orden = { cuenta:"id", cuenta_metrica:"cuenta_id,fecha_snapshot,fuente", pieza:"post_id", pieza_metrica:"post_id,fecha_snapshot,fuente", pieza_pilar:"post_id,pilar", config:"clave", v_pieza_ranking:"post_id", v_base_formato:"cuenta_id,formato", v_pilar_rendimiento:"pilar", v_efecto_palabra_clave:"pide_palabra_clave", audiencia_snapshot:"fecha_snapshot,corte,clave", historia:"historia_id", historia_metrica:"historia_id,fecha_snapshot", v_anuncio:"ad_id", v_campana:"campana,moneda", usuario:"id", negocio_gasto_diario:"fecha,campana_id", negocio_dolar:"mes", negocio_agenda:"id", negocio_lead:"id", negocio_llamada:"id", negocio_carga:"fuente" };
+  const orden = { cuenta:"id", cuenta_metrica:"cuenta_id,fecha_snapshot,fuente", pieza:"post_id", pieza_metrica:"post_id,fecha_snapshot,fuente", pieza_pilar:"post_id,pilar", config:"clave", v_pieza_ranking:"post_id", v_base_formato:"cuenta_id,formato", v_pilar_rendimiento:"pilar", v_efecto_palabra_clave:"pide_palabra_clave", audiencia_snapshot:"fecha_snapshot,corte,clave", historia:"historia_id", historia_metrica:"historia_id,fecha_snapshot", v_anuncio:"ad_id", v_campana:"campana,moneda", usuario:"id", negocio_gasto_diario:"fecha,campana_id", negocio_dolar:"mes", negocio_agenda:"id", negocio_lead:"id", negocio_llamada:"id", negocio_carga:"fuente", meta_mensual:"mes,metrica" };
   if (!consulta.includes("order=") && orden[recurso]) consulta += `&order=${orden[recurso]}`;
   const filas = [];
   for (let desde = 0; desde < MAX_FILAS; desde += PAGINA) {
@@ -449,7 +451,7 @@ async function construirAnalisis(jwt, seccion = "completo", cuentaId) {
     const [filas, campanas] = await Promise.all([traer("v_anuncio", "select=*", jwt), traer("v_campana", "select=*", jwt)]);
     return { anuncios: construirAnuncios(filas, campanas) };
   }
-  if (seccion === "negocio") return await construirNegocio(jwt);
+  if (seccion === "negocio") return await construirNegocio(jwt, deCuenta);
   if (seccion === "historias") {
     const [filas, metricas] = await Promise.all([traer("historia", `select=*&${deCuenta}&order=publicado_en.desc,historia_id.asc`, jwt), traer("historia_metrica", "select=*&order=fecha_snapshot.desc,historia_id.asc", jwt)]);
     return { historias: construirHistorias(filas, metricas) };
@@ -901,7 +903,7 @@ const dividir = (a, b, escala = 1, decimales = 2) =>
   a === null || b === null || !b ? null : redondear((a / b) * escala, decimales);
 const normalizarNombre = (t) => String(t ?? "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").split(/\s+/).filter(Boolean).join(" ");
 
-async function construirNegocio(jwt) {
+async function construirNegocio(jwt, deCuenta) {
   const [gasto, dolar, agendas, leads, llamadas, cargas] = await Promise.all([
     traer("negocio_gasto_diario", "select=*", jwt),
     traer("negocio_dolar", "select=*", jwt),
@@ -909,6 +911,21 @@ async function construirNegocio(jwt) {
     traer("negocio_lead", "select=id,creado,fuente,origen", jwt),
     traer("negocio_llamada", "select=*", jwt),
     traer("negocio_carga", "select=*", jwt),
+  ]);
+  // Sin la migracion 0015 la tabla no existe: Negocio sigue funcionando y el
+  // panel avisa que las metas no estan disponibles, en vez de caerse entero.
+  const metas = await traer("meta_mensual", "select=mes,metrica,objetivo", jwt)
+    .catch((e) => (/PGRST205|42P01/.test(String(e?.message)) ? null : Promise.reject(e)));
+  // Solo las piezas cuyo link anoto el setter en una venta: el catalogo entero
+  // son miles de filas. El like es un prefiltro; el cruce exacto lo hace
+  // atribuirVentas comparando la clave completa.
+  const links = [...new Set(llamadas.filter((l) => l.resultado === "Cerró").map((l) => claveInstagram(l.detalle)).filter(Boolean))];
+  const codigos = (prefijo) => links.filter((k) => k.startsWith(prefijo)).map((k) => k.slice(prefijo.length));
+  const contiene = (cs) => `or=(${cs.map((c) => `permalink.like.*${c}*`).join(",")})`;
+  const [enPiezas, enHistorias] = [codigos("publicacion:"), codigos("historia:")];
+  const [piezas, historias] = await Promise.all([
+    enPiezas.length ? traer("pieza", `select=post_id,permalink,fecha_publicacion,formato,primera_linea,thumb_path&${deCuenta}&${contiene(enPiezas)}`, jwt) : [],
+    enHistorias.length ? traer("historia", `select=historia_id,permalink,publicado_en&${deCuenta}&${contiene(enHistorias)}`, jwt) : [],
   ]);
   if (!gasto.length && !agendas.length && !llamadas.length) {
     return {
@@ -1055,6 +1072,13 @@ async function construirNegocio(jwt) {
       fuente_leads: contar(leads, "fuente"),
       etapas: contar(agendas, "etapa"),
       fuente_llamadas: contar(llamadas, "fuente"),
+      metas: metas === null ? null : metas.map((m) => ({ mes: m.mes, metrica: m.metrica, objetivo: aNumero(m.objetivo) })),
+      atribucion: atribuirVentas(
+        llamadas,
+        piezas.map((p) => ({ id: p.post_id, permalink: p.permalink, fecha: p.fecha_publicacion, formato: p.formato,
+          titulo: primeraLinea(p.primera_linea).slice(0, 90), thumb: urlMiniatura(p.thumb_path) })),
+        historias.map((h) => ({ id: h.historia_id, permalink: h.permalink, fecha: h.publicado_en })),
+      ),
       conciliacion,
       llamadas: [...llamadas].sort((a, b) => b.fecha.localeCompare(a.fecha) || a.prospecto.localeCompare(b.prospecto)).map((l) => ({
         fecha: l.fecha, prospecto: l.prospecto, fuente: l.fuente ?? null, asistio: l.asistio ?? null,
@@ -1192,8 +1216,9 @@ async function identidad(req) {
     return { jwt, id: user.id, email: user.email ?? null, tipo: "equipo", rol: miembros[0].rol, cuentaId: propia[0]?.id ?? null, conexion: null };
   }
   // Alumno: solo su propia cuenta conectada. RLS de instagram_conexion ya
-  // limita a su workspace; el registro abierto esta desactivado, asi que todo
-  // usuario autenticado fuera del equipo fue invitado por el equipo.
+  // limita a su workspace. El registro abierto de Supabase esta desactivado:
+  // todo usuario autenticado fuera del equipo lo creo un admin o entro con un
+  // codigo de invitacion de un solo uso (backend/registro.mjs).
   const conexiones = await traer("instagram_conexion",
     "select=id,instagram_user_id,username,estado,token_expira_en,ultima_sincronizacion,ultimo_error_publico,actualizado_en&order=actualizado_en.desc", jwt);
   const vigente = conexiones.find((c) => ["activa", "vencida", "error"].includes(c.estado)) ?? null;
@@ -1227,6 +1252,9 @@ async function atender(req, res) {
     "/api/plan": ["GET", "POST", "PATCH", "DELETE"],
     "/api/ideas": ["GET", "POST", "PATCH"],
     "/api/ideas/sugerencias": ["GET"],
+    "/api/metas": ["POST", "DELETE"],
+    "/api/registro": ["POST"],
+    "/api/invitaciones": ["GET", "POST", "DELETE"],
     "/api/yo": ["GET"],
     "/api/cabecera": ["GET"],
     "/api/instagram/iniciar": ["POST"],
@@ -1239,6 +1267,12 @@ async function atender(req, res) {
   // Solo confiar en la cabecera de IP normalizada por Vercel. Local: socket.
   const ip = ENV.VERCEL ? req.headers["x-vercel-forwarded-for"] || "unknown" : req.socket?.remoteAddress || "local";
   if (!await rateLimit(`ip:${ip}`, 120, ENV)) return json(res, { error: "Demasiadas solicitudes. Espera un minuto." }, 429, { "retry-after": "60" });
+  // Unica ruta sin sesion: quien se registra todavia no tiene cuenta. Cuota
+  // propia y baja para que adivinar codigos no sea practico.
+  if (url.pathname === "/api/registro") {
+    if (!await rateLimit(`registro:${ip}`, 5, ENV)) return json(res, { error: "Demasiados intentos. Espera un minuto." }, 429, { "retry-after": "60" });
+    return await registrarAlumno(req, res, ENV);
+  }
   const user = await identidad(req);
   if (!await rateLimit(`user:${user.id}:${req.method === "GET" ? "read" : "write"}`, req.method === "GET" ? 60 : 15, ENV)) {
     return json(res, { error: "Has alcanzado el límite. Espera un minuto." }, 429, { "retry-after": "60" });
@@ -1273,11 +1307,12 @@ async function atender(req, res) {
         d.rankings.todas = [];
         d.calendario = d.calendario.filter(p => p.fecha >= corteHist).map(p => p.fecha >= corte
           ? { id: p.id, fecha: p.fecha, permalink: p.permalink, formato: p.formato, thumb: p.thumb,
-              primera_linea: p.primera_linea.slice(0, 90), alcance: p.alcance, guardados: p.guardados,
+              primera_linea: p.primera_linea.slice(0, 90), alcance: p.alcance, vistas: p.vistas, guardados: p.guardados,
               likes: p.likes, comentarios: p.comentarios, compartidos: p.compartidos }
-          : { fecha: p.fecha, alcance: p.alcance, guardados: p.guardados });
+          // Del periodo anterior solo lo que compara el Dashboard ("vs anterior").
+          : { fecha: p.fecha, alcance: p.alcance, vistas: p.vistas, guardados: p.guardados, likes: p.likes, comentarios: p.comentarios });
         d.historias.filas = d.historias.filas.filter(h => (h.hora ?? "") >= corteHist)
-          .map(h => ({ id: h.id, hora: h.hora, alcance: h.alcance }));
+          .map(h => ({ id: h.id, hora: h.hora, alcance: h.alcance, respuestas: h.respuestas }));
         d.mesa.propuestas = d.mesa.propuestas.slice(0,1);
         delete d.por_pilar; delete d.correlaciones;
       }
@@ -1292,6 +1327,8 @@ async function atender(req, res) {
   if (url.pathname === "/api/plan") return await plan(req, res, user);
   if (url.pathname === "/api/ideas/sugerencias") return json(res, await listarSugerencias(url.searchParams, jwt, cuentaId));
   if (url.pathname === "/api/ideas") return await ideas(req, res, user);
+  if (url.pathname === "/api/metas") return await metas(req, res, user);
+  if (url.pathname === "/api/invitaciones") return await rutaInvitaciones(req, res, user, ENV);
   if (req.method === "GET") return json(res, await listarCompetidores(jwt));
   if (user.rol === "lectura") throw new HttpError(403, "Tu acceso es de lectura.");
   const cuerpo = await readBody(req);
@@ -1407,6 +1444,31 @@ function urlHttps(v, campo) {
   const t = textField(v, campo, 1000);
   if (!/^https:\/\//.test(t)) throw new HttpError(400, `${campo} no es válido.`);
   return t;
+}
+
+const METRICAS_META = ["ingresos_usd", "ventas", "agendas", "asistieron", "conversaciones"];
+
+/** Metas mensuales de Negocio. POST guarda o reemplaza la meta del mes; DELETE
+ *  la quita. El RLS de 0015 ya limita a admin; esto evita el viaje a la base. */
+async function metas(req, res, { jwt, rol }) {
+  if (rol !== "admin") throw new HttpError(403, "Solo administración puede editar las metas.");
+  const b = await readBody(req);
+  if (typeof b.mes !== "string" || !/^\d{4}-(0[1-9]|1[0-2])-01$/.test(b.mes)) throw new HttpError(400, "El mes no es válido.");
+  const metrica = opcion(b.metrica, METRICAS_META, "La métrica");
+  const clave = `mes=eq.${b.mes}&metrica=eq.${metrica}`;
+  if (req.method === "DELETE") {
+    const r = await rest(`meta_mensual?${clave}`, { jwt, metodo: "DELETE", prefer: "return=representation" });
+    comprobarEscritura(r);
+    return json(res, { ok: true });
+  }
+  const objetivo = typeof b.objetivo === "number" ? b.objetivo : Number.NaN;
+  if (!Number.isFinite(objetivo) || objetivo <= 0 || objetivo >= 1e8) throw new HttpError(400, "El objetivo tiene que ser un número mayor que cero.");
+  const r = await rest("meta_mensual?on_conflict=mes,metrica", {
+    jwt, metodo: "POST", prefer: "resolution=merge-duplicates,return=representation",
+    cuerpo: [{ mes: b.mes, metrica, objetivo }],
+  });
+  comprobarEscritura(r);
+  return json(res, { ok: true, meta: r.datos?.[0] ?? null });
 }
 
 async function ideas(req, res, { jwt, rol }) {
