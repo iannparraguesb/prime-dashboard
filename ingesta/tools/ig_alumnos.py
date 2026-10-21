@@ -117,6 +117,9 @@ def sincronizar(con, limite, fecha):
            for k, v in valores.items() if v is not None]
     if aud:
         sb.upsert("audiencia_snapshot", aud, "cuenta_id,fecha_snapshot,corte,clave")
+    # Un desglose vacio no siempre es "menos de 100 seguidores": que quede en el log lo que dijo Meta.
+    for corte, motivo in (audiencia.get("errores") or {}).items():
+        print(f"  ! @{cuenta.get('username')}: audiencia {corte} sin datos ({motivo[:160]})", file=sys.stderr)
 
     # Miniaturas: las URLs de Instagram caducan; se copian al bucket las que falten.
     por_id = {p["id"]: p for p in piezas}
