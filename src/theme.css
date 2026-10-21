@@ -2054,3 +2054,107 @@ a.dash-fila:focus-visible { outline: 2px solid var(--acento); outline-offset: 2p
   .dash-lado { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); align-items: start; }
 }
 @container principal (max-width: 560px) { .cabecera { flex-direction: column; } }
+
+/* ==========================================================================
+   Acceso (login): formulario a la izquierda, panel de marca a la derecha.
+   Adaptado del SignInPage de 21st.dev sin Tailwind: tokens propios.
+   ========================================================================== */
+.acceso { min-height: 100dvh; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); background: var(--bg); }
+.acceso-lado { display: flex; align-items: center; justify-content: center; padding: var(--e6) var(--e5); }
+.acceso-caja { width: 100%; max-width: 400px; display: grid; gap: var(--e5); }
+.acceso-titulo { font-size: clamp(32px, 4vw, 44px); font-weight: 700; letter-spacing: -0.035em; line-height: 1.05; margin: 0; }
+.acceso-sub { margin: var(--e2) 0 0; color: var(--texto-2); font-size: 15px; line-height: 1.6; }
+.acceso-form { display: grid; gap: var(--e4); }
+.acceso-campo { display: grid; gap: 6px; }
+.acceso-campo label { font-size: 13px; font-weight: 600; color: var(--texto-2); }
+.acceso-input {
+  position: relative; display: flex; align-items: center;
+  border: 1px solid var(--linea-fuerte); border-radius: 14px; background: var(--superficie);
+  transition: border-color var(--transicion), box-shadow var(--transicion);
+}
+.acceso-input:focus-within { border-color: var(--prime-amber); box-shadow: 0 0 0 4px color-mix(in srgb, var(--prime-gold) 22%, transparent); }
+.acceso-input input {
+  flex: 1; min-width: 0; border: 0; background: transparent; border-radius: 14px;
+  padding: 15px 16px; font: inherit; font-size: 15px; color: var(--texto);
+}
+.acceso-input input:focus { outline: none; }
+.acceso-input input::placeholder { color: var(--texto-3); }
+.acceso-ojo {
+  display: grid; place-items: center; width: 40px; height: 40px; margin-right: 6px;
+  border: 0; border-radius: 10px; background: transparent; color: var(--texto-3); cursor: pointer;
+  transition: color var(--transicion), background-color var(--transicion), transform var(--transicion);
+}
+.acceso-ojo:hover { color: var(--texto); background: var(--superficie-alta); }
+.acceso-ojo:focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; }
+.acceso-ojo:active { transform: scale(0.94); }
+.acceso-boton { width: 100%; justify-content: center; padding: 15px; font-size: 15px; font-weight: 700; border-radius: 14px; }
+.acceso-cambio { margin: 0; text-align: center; font-size: 14px; color: var(--texto-2); }
+.acceso-cambio button { border: 0; background: none; padding: 2px; font: inherit; font-weight: 700; color: var(--acento); cursor: pointer; border-radius: 4px; }
+.acceso-cambio button:hover:not(:disabled) { text-decoration: underline; text-underline-offset: 3px; }
+.acceso-cambio button:focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; }
+.acceso-cambio button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Panel de marca: siempre oscuro (negro + dorado de Prime), en los dos temas */
+.acceso-hero {
+  position: relative; margin: var(--e4); border-radius: 28px; overflow: hidden; isolation: isolate;
+  display: flex; flex-direction: column; justify-content: space-between; gap: var(--e6);
+  padding: clamp(32px, 4.5vw, 56px); color: #f5f1e8;
+}
+.acceso-hero-fondo {
+  position: absolute; inset: 0; z-index: -1;
+  background:
+    radial-gradient(900px 600px at 88% 6%, rgba(232, 176, 60, 0.36), transparent 60%),
+    radial-gradient(720px 520px at 6% 96%, rgba(168, 95, 8, 0.48), transparent 62%),
+    radial-gradient(520px 420px at 62% 58%, rgba(250, 205, 92, 0.1), transparent 70%),
+    linear-gradient(160deg, #1a1207, #0b0804 72%);
+}
+.acceso-hero-fondo::after {
+  content: ""; position: absolute; inset: 0; opacity: 0.1; mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='r'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23r)'/%3E%3C/svg%3E");
+}
+.acceso-eyebrow {
+  display: inline-block; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--prime-gold-pale); padding: 6px 12px; border: 1px solid rgba(253, 230, 168, 0.3); border-radius: 999px;
+}
+.acceso-hero-texto h2 {
+  font-size: clamp(30px, 3.4vw, 46px); line-height: 1.08; letter-spacing: -0.035em; font-weight: 700;
+  margin: var(--e5) 0 var(--e3); max-width: 15ch; color: #fff;
+}
+.acceso-hero-texto p { margin: 0; max-width: 40ch; font-size: 16px; line-height: 1.6; color: rgba(245, 241, 232, 0.72); }
+.acceso-ventajas { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--e3); }
+.acceso-ventaja {
+  display: flex; gap: var(--e3); align-items: flex-start; max-width: 440px; padding: var(--e4);
+  border-radius: 18px; background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 12px 30px -18px rgba(0, 0, 0, 0.6);
+}
+.acceso-ventaja strong { display: block; font-size: 15px; color: #fff; }
+.acceso-ventaja p { margin: 2px 0 0; font-size: 13.5px; line-height: 1.5; color: rgba(245, 241, 232, 0.7); }
+.acceso-ventaja-icono {
+  flex: 0 0 36px; height: 36px; display: grid; place-items: center; border-radius: 10px;
+  background: linear-gradient(140deg, var(--prime-bronze), var(--prime-gold-bright)); color: var(--prime-ink);
+}
+
+/* Entrada escalonada: solo opacity y transform */
+@keyframes accesoEntra { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes accesoDesliza { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: none; } }
+.acceso-entra, .acceso-ventaja { animation: accesoEntra 0.55s cubic-bezier(0.2, 0.9, 0.3, 1) both; }
+.acceso-hero { animation: accesoDesliza 0.7s cubic-bezier(0.2, 0.9, 0.3, 1) 120ms both; }
+.acceso [data-paso="1"] { animation-delay: 60ms; }
+.acceso [data-paso="2"] { animation-delay: 120ms; }
+.acceso [data-paso="3"] { animation-delay: 180ms; }
+.acceso [data-paso="4"] { animation-delay: 240ms; }
+.acceso [data-paso="5"] { animation-delay: 300ms; }
+.acceso [data-paso="6"] { animation-delay: 340ms; }
+.acceso [data-paso="7"] { animation-delay: 400ms; }
+.acceso [data-paso="8"] { animation-delay: 520ms; }
+.acceso [data-paso="9"] { animation-delay: 640ms; }
+.acceso [data-paso="10"] { animation-delay: 760ms; }
+@media (prefers-reduced-motion: reduce) {
+  .acceso-entra, .acceso-ventaja, .acceso-hero { animation: none; }
+}
+@media (max-width: 900px) {
+  .acceso { grid-template-columns: 1fr; }
+  .acceso-hero { display: none; }
+  .acceso-lado { padding: var(--e5) var(--e4); align-items: flex-start; padding-top: 12vh; }
+}

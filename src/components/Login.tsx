@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Icono } from "./icons";
+import { useState, type ReactNode } from "react";
+import { Icono, type NombreIcono } from "./icons";
 import type { EstadoSesion } from "../hooks/useSesion";
 
 /** Crea la cuenta del alumno con su codigo de invitacion. El servidor valida el
@@ -14,9 +14,28 @@ async function registrar(email: string, clave: string, codigo: string) {
   if (!r.ok || d.error) throw new Error(d.error || "No pudimos crear tu cuenta. Inténtalo de nuevo.");
 }
 
+/** Lo que el panel hace de verdad, para el equipo y para los alumnos. En vez de
+ *  testimonios: no hay ninguno documentado sobre el panel y no se inventan. */
+const VENTAJAS: { icono: NombreIcono; titulo: string; texto: string }[] = [
+  { icono: "piezas", titulo: "Qué funcionó de verdad", texto: "Guardados sobre alcance, comparados con la mediana de tu propio formato." },
+  { icono: "historias", titulo: "Dónde se va la gente", texto: "La curva de abandono de tus historias, slide por slide." },
+  { icono: "calendario", titulo: "Todo lo que publicaste", texto: "Tu calendario día por día, con el alcance de cada pieza." },
+];
+
+function Campo({ id, etiqueta, ayuda, children }: { id: string; etiqueta: string; ayuda?: string; children: ReactNode }) {
+  return (
+    <div className="acceso-campo">
+      <label htmlFor={id}>{etiqueta}</label>
+      <div className="acceso-input">{children}</div>
+      {ayuda ? <small className="login-ayuda">{ayuda}</small> : null}
+    </div>
+  );
+}
+
 export function Login({ s }: { s: EstadoSesion }) {
   const [email, setEmail] = useState("");
   const [clave, setClave] = useState("");
+  const [verClave, setVerClave] = useState(false);
   const [modo, setModo] = useState<"entrar" | "registro">("entrar");
   const [codigo, setCodigo] = useState("");
   const [registrando, setRegistrando] = useState(false);
@@ -65,89 +84,133 @@ export function Login({ s }: { s: EstadoSesion }) {
   };
 
   return (
-    <div className="login">
-      <form
-        className="card login-caja"
-        onSubmit={(ev) => {
-          ev.preventDefault();
-          if (!puede) return;
-          if (registro) void crearCuenta();
-          else void s.entrar(email, clave);
-        }}
-      >
-        <div className="marca" style={{ marginBottom: "var(--e5)" }}>
-          <div className="marca-punto">P</div>
-          <div>
-            <div className="marca-txt">Prime Club</div>
-            <div className="marca-sub">Inteligencia de contenido</div>
+    <div className="acceso">
+      <section className="acceso-lado">
+        <div className="acceso-caja">
+          <div className="marca acceso-entra">
+            <div className="marca-punto">P</div>
+            <div>
+              <div className="marca-txt">Prime Club</div>
+              <div className="marca-sub">Inteligencia de contenido</div>
+            </div>
           </div>
+
+          <div className="acceso-encabezado">
+            <h1 className="acceso-titulo acceso-entra" data-paso="1">{registro ? "Crea tu cuenta" : "Entra a tu panel"}</h1>
+            <p className="acceso-sub acceso-entra" data-paso="2">
+              {registro
+                ? "Necesitas el código que te mandó el equipo de Prime Club. Sirve una sola vez."
+                : "Acceso para el equipo y los alumnos de Prime Club."}
+            </p>
+          </div>
+
+          <form
+            className="acceso-form"
+            onSubmit={(ev) => {
+              ev.preventDefault();
+              if (!puede) return;
+              if (registro) void crearCuenta();
+              else void s.entrar(email, clave);
+            }}
+          >
+            <div className="acceso-entra" data-paso="3">
+              <Campo id="acceso-email" etiqueta="Correo">
+                <input
+                  id="acceso-email"
+                  type="email"
+                  autoComplete="username"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="tu@correo.com"
+                  autoFocus
+                />
+              </Campo>
+            </div>
+
+            <div className="acceso-entra" data-paso="4">
+              <Campo id="acceso-clave" etiqueta="Clave" ayuda={registro ? "Mínimo 10 caracteres." : undefined}>
+                <input
+                  id="acceso-clave"
+                  type={verClave ? "text" : "password"}
+                  autoComplete={registro ? "new-password" : "current-password"}
+                  minLength={registro ? 10 : undefined}
+                  value={clave}
+                  onChange={(e) => setClave(e.target.value)}
+                  placeholder={registro ? "Elige una clave" : "Tu clave"}
+                />
+                <button
+                  type="button"
+                  className="acceso-ojo"
+                  onClick={() => setVerClave((v) => !v)}
+                  aria-label={verClave ? "Ocultar la clave" : "Mostrar la clave"}
+                  aria-pressed={verClave}
+                >
+                  <Icono nombre={verClave ? "vistaNo" : "vista"} size={18} />
+                </button>
+              </Campo>
+            </div>
+
+            {registro ? (
+              <div className="acceso-entra" data-paso="5">
+                <Campo id="acceso-codigo" etiqueta="Código de invitación">
+                  <input
+                    id="acceso-codigo"
+                    autoComplete="one-time-code"
+                    autoCapitalize="characters"
+                    spellCheck={false}
+                    value={codigo}
+                    onChange={(e) => setCodigo(e.target.value)}
+                    placeholder="XXXXX-XXXXX"
+                  />
+                </Campo>
+              </div>
+            ) : null}
+
+            {/* El error va visible y con la causa, no solo en la consola. */}
+            {error ? (
+              <div className="login-error" role="alert">
+                <Icono nombre="error" size={15} />
+                <span>{error}</span>
+              </div>
+            ) : null}
+
+            {/* La animacion va en el contenedor: en el boton fijaria la opacidad y
+                taparia el estado deshabilitado. */}
+            <div className="acceso-entra" data-paso="6">
+              <button className="btn acceso-boton" data-variante="oro" type="submit" disabled={!puede}>
+                {registrando ? "Creando tu cuenta…" : s.cargando ? "Entrando…" : registro ? "Crear cuenta" : "Entrar"}
+              </button>
+            </div>
+          </form>
+
+          <p className="acceso-cambio acceso-entra" data-paso="7">
+            {registro ? "¿Ya tienes cuenta?" : "¿Eres alumno y tienes un código?"}{" "}
+            <button type="button" onClick={cambiarModo} disabled={ocupado}>
+              {registro ? "Entrar" : "Crea tu cuenta"}
+            </button>
+          </p>
         </div>
+      </section>
 
-        <h1 style={{ fontSize: 22 }}>{registro ? "Crear cuenta de alumno" : "Entrar"}</h1>
-        <p className="login-sub">
-          {registro
-            ? "Necesitas el código que te mandó el equipo de Prime Club. Sirve una sola vez."
-            : "Acceso para el equipo y los alumnos de Prime Club."}
-        </p>
-
-        <label className="login-campo">
-          <span>Correo</span>
-          <input
-            className="control"
-            type="email"
-            autoComplete="username"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="tu@correo.com"
-            autoFocus
-          />
-        </label>
-
-        <label className="login-campo">
-          <span>Clave</span>
-          <input
-            className="control"
-            type="password"
-            autoComplete={registro ? "new-password" : "current-password"}
-            minLength={registro ? 10 : undefined}
-            value={clave}
-            onChange={(e) => setClave(e.target.value)}
-          />
-          {registro ? <small className="login-ayuda">Mínimo 10 caracteres.</small> : null}
-        </label>
-
-        {registro ? (
-          <label className="login-campo">
-            <span>Código de invitación</span>
-            <input
-              className="control"
-              autoComplete="one-time-code"
-              autoCapitalize="characters"
-              spellCheck={false}
-              value={codigo}
-              onChange={(e) => setCodigo(e.target.value)}
-              placeholder="XXXXX-XXXXX"
-            />
-          </label>
-        ) : null}
-
-        {/* El error va visible y con la causa, no solo en la consola. */}
-        {error ? (
-          <div className="login-error" role="alert">
-            <Icono nombre="error" size={15} />
-            <span>{error}</span>
-          </div>
-        ) : null}
-
-        <button className="btn" data-variante="oro" type="submit" disabled={!puede}>
-          {registrando ? "Creando tu cuenta…" : s.cargando ? "Entrando…" : registro ? "Crear cuenta" : "Entrar"}
-          {ocupado ? null : <Icono nombre="externo" size={14} />}
-        </button>
-
-        <button type="button" className="login-cambio" onClick={cambiarModo} disabled={ocupado}>
-          {registro ? "Ya tengo cuenta: entrar" : "¿Eres alumno y tienes un código? Crea tu cuenta"}
-        </button>
-      </form>
+      <aside className="acceso-hero" aria-label="Qué encuentras en el panel">
+        <div className="acceso-hero-fondo" />
+        <div className="acceso-hero-texto">
+          <span className="acceso-eyebrow">Panel de contenido</span>
+          <h2>Qué publicar, qué repetir y qué dejar de hacer.</h2>
+          <p>Con tus propios datos de Instagram, medidos sin promedios engañosos.</p>
+        </div>
+        <ul className="acceso-ventajas">
+          {VENTAJAS.map((v, i) => (
+            <li key={v.titulo} className="acceso-ventaja" data-paso={8 + i}>
+              <span className="acceso-ventaja-icono"><Icono nombre={v.icono} size={18} /></span>
+              <div>
+                <strong>{v.titulo}</strong>
+                <p>{v.texto}</p>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </aside>
     </div>
   );
 }
