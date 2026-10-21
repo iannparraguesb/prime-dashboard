@@ -107,7 +107,7 @@ const MAX_FILAS = 10000;
 /** Trae una tabla o vista completa, paginando por Range para no depender del
  *  limite de filas que tenga configurado el proyecto. */
 async function traer(recurso, consulta = "select=*", jwt = null) {
-  const orden = { cuenta:"id", cuenta_metrica:"cuenta_id,fecha_snapshot,fuente", pieza:"post_id", pieza_metrica:"post_id,fecha_snapshot,fuente", pieza_pilar:"post_id,pilar", config:"clave", v_pieza_ranking:"post_id", v_base_formato:"cuenta_id,formato", v_pilar_rendimiento:"pilar", v_efecto_palabra_clave:"pide_palabra_clave", audiencia_snapshot:"fecha_snapshot,corte,clave", historia:"historia_id", historia_metrica:"historia_id,fecha_snapshot", v_anuncio:"ad_id", v_campana:"campana,moneda", usuario:"id", negocio_gasto_diario:"fecha,campana_id", negocio_dolar:"mes", negocio_agenda:"id", negocio_lead:"id", negocio_llamada:"id", negocio_carga:"fuente", meta_mensual:"mes,metrica" };
+  const orden = { cuenta:"id", cuenta_metrica:"cuenta_id,fecha_snapshot,fuente", pieza:"post_id", pieza_metrica:"post_id,fecha_snapshot,fuente", v_pieza_ultima:"post_id", pieza_pilar:"post_id,pilar", config:"clave", v_pieza_ranking:"post_id", v_base_formato:"cuenta_id,formato", v_pilar_rendimiento:"pilar", v_efecto_palabra_clave:"pide_palabra_clave", audiencia_snapshot:"fecha_snapshot,corte,clave", historia:"historia_id", historia_metrica:"historia_id,fecha_snapshot", v_anuncio:"ad_id", v_campana:"campana,moneda", usuario:"id", negocio_gasto_diario:"fecha,campana_id", negocio_dolar:"mes", negocio_agenda:"id", negocio_lead:"id", negocio_llamada:"id", negocio_carga:"fuente", meta_mensual:"mes,metrica" };
   if (!consulta.includes("order=") && orden[recurso]) consulta += `&order=${orden[recurso]}`;
   const filas = [];
   for (let desde = 0; desde < MAX_FILAS; desde += PAGINA) {
@@ -505,16 +505,17 @@ async function construirAnalisis(jwt, seccion = "completo", cuentaId) {
     // cuenta. Paso: mostro 751.269 de @therealbrianmark en vez de 106.345.
     traer("cuenta_metrica", `select=*&${deCuenta}&order=fecha_snapshot.desc&limit=90`, jwt),
     traer("config", "select=clave,valor", jwt),
-    // Filtrada por cuenta via pieza: sin filtro el equipo leia tambien las
-    // metricas de competidores y alumnos, y la tabla paso de MAX_FILAS (422).
-    si(necesita("piezas"), "pieza_metrica", `select=post_id,fecha_snapshot,fuente,interacciones_totales,pieza!inner(cuenta_id)&pieza.${deCuenta}`),
+    // Solo el ultimo snapshot de cada pieza, que es la observacion que usa
+    // v_pieza_ranking. Leer pieza_metrica entera crece un snapshot por pieza
+    // por dia y paso de MAX_FILAS (422) en Publicaciones y Espia.
+    si(necesita("piezas"), "v_pieza_ultima", `select=post_id,fecha_snapshot,fuente,interacciones_totales,pieza!inner(cuenta_id)&pieza.${deCuenta}`),
     si(necesita("audiencia"), "audiencia_snapshot", `select=corte,clave,valor,fecha_snapshot&${deCuenta}&order=fecha_snapshot.desc`),
     si(necesita("historias", "calendario", "resumen"), "historia", `select=*&${deCuenta}`),
     si(necesita("historias", "calendario", "resumen"), "historia_metrica", "select=*&order=fecha_snapshot.desc"),
     si(necesita("competencia"), "cuenta", "select=id,username,es_propia"),
     si(necesita("competencia"), "pieza", "select=post_id,cuenta_id,permalink,fecha_publicacion,formato,primera_linea,thumb_path&cuenta_id=like.externa:*"),
-    si(necesita("competencia"), "pieza_metrica", "select=post_id,likes,comentarios,fecha_snapshot,pieza!inner(cuenta_id)&pieza.cuenta_id=like.externa:*&order=fecha_snapshot.desc"),
-    si(necesita("competencia"), "cuenta_metrica", "select=cuenta_id,seguidores,publicaciones,fecha_snapshot&order=fecha_snapshot.desc"),
+    si(necesita("competencia"), "v_pieza_ultima", "select=post_id,likes,comentarios,fecha_snapshot,pieza!inner(cuenta_id)&pieza.cuenta_id=like.externa:*"),
+    si(necesita("competencia"), "cuenta_metrica", "select=cuenta_id,seguidores,publicaciones,fecha_snapshot&cuenta_id=like.externa:*&order=fecha_snapshot.desc,cuenta_id"),
     si(necesita("anuncios"), "v_anuncio", "select=*"),
     si(necesita("anuncios"), "v_campana", "select=*"),
   ]);
