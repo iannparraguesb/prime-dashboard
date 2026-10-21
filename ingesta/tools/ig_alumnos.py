@@ -122,7 +122,11 @@ def sincronizar(con, limite, fecha):
     for corte, motivo in (audiencia.get("errores") or {}).items():
         print(f"  ! @{cuenta.get('username')}: audiencia {corte} sin datos ({motivo[:160]})", file=sys.stderr)
     if not aud and not audiencia.get("errores"):
-        print(f"  ! @{cuenta.get('username')}: Meta respondio la audiencia sin desglose", file=sys.stderr)
+        # Solo `data`: los enlaces de `paging` llevan el token del alumno.
+        muestra = ig.api(f"{cid}/insights", metric="follower_demographics", period="lifetime",
+                         metric_type="total_value", breakdown="country", timeframe="this_month")
+        print(f"  ! @{cuenta.get('username')}: Meta respondio la audiencia sin desglose: "
+              f"{json.dumps(muestra.get('data'))[:400]}", file=sys.stderr)
 
     # Miniaturas: las URLs de Instagram caducan; se copian al bucket las que falten.
     por_id = {p["id"]: p for p in piezas}
