@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Badge, Base, NADA } from "../components/ui";
+import { Badge, Base, NADA, haceCuanto } from "../components/ui";
 import { Icono } from "../components/icons";
 
 interface Invitacion {
@@ -9,6 +9,25 @@ interface Invitacion {
   expira_en: string;
   usado_en: string | null;
   revocado_en: string | null;
+  /** Con que correo se creo la cuenta (null si el codigo no se uso). */
+  correo: string | null;
+  instagram_username: string | null;
+  instagram_estado: "pendiente" | "activa" | "vencida" | "revocada" | "error" | null;
+  ultima_sincronizacion: string | null;
+  instagram_error: string | null;
+}
+
+/** El ultimo paso del alumno: lo que falta para que vea su panel. */
+function instagram(x: Invitacion) {
+  if (!x.usado_en) return <span style={{ color: "var(--texto-3)" }}>{NADA}</span>;
+  if (!x.instagram_estado) return <span style={{ color: "var(--texto-3)" }}>sin conectar</span>;
+  const tono = x.instagram_estado === "activa" ? "bien" : x.instagram_estado === "vencida" || x.instagram_estado === "error" ? "mal" : undefined;
+  const texto = { activa: "conectado", vencida: "vencido", error: "con error", pendiente: "pendiente", revocada: "desconectado" }[x.instagram_estado];
+  return (
+    <span title={x.instagram_error ?? undefined}>
+      @{x.instagram_username ?? "?"} <Badge tono={tono}>{texto}</Badge>
+    </span>
+  );
 }
 
 const fecha = (iso: string) => new Date(iso).toLocaleDateString("es-CL", { day: "numeric", month: "short", year: "numeric" });
@@ -134,25 +153,30 @@ export function Alumnos({ jwt }: { jwt: string | null }) {
             <thead>
               <tr>
                 <th>Alumno</th>
-                <th>Creado</th>
-                <th>Vence</th>
-                <th>Estado</th>
+                <th>Código</th>
+                <th>Cuenta</th>
+                <th>Instagram</th>
+                <th>Datos</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
               {filas === null ? (
-                <tr><td colSpan={5}>Cargando…</td></tr>
+                <tr><td colSpan={6}>Cargando…</td></tr>
               ) : !filas.length ? (
-                <tr><td colSpan={5} style={{ color: "var(--texto-3)" }}>Todavía no creaste ningún código.</td></tr>
+                <tr><td colSpan={6} style={{ color: "var(--texto-3)" }}>Todavía no creaste ningún código.</td></tr>
               ) : filas.map((x) => {
                 const e = estado(x);
                 return (
                   <tr key={x.id}>
                     <td>{x.nota}</td>
-                    <td>{fecha(x.creado_en)}</td>
-                    <td>{x.usado_en ? NADA : fecha(x.expira_en)}</td>
-                    <td><Badge tono={e.tono}>{e.t}{x.usado_en ? ` el ${fecha(x.usado_en)}` : ""}</Badge></td>
+                    <td>
+                      <Badge tono={e.tono}>{e.t}{x.usado_en ? ` el ${fecha(x.usado_en)}` : ""}</Badge>
+                      {e.t === "Pendiente" ? <small className="dash-sub"> vence {fecha(x.expira_en)}</small> : null}
+                    </td>
+                    <td>{x.correo ?? <span style={{ color: "var(--texto-3)" }}>{NADA}</span>}</td>
+                    <td>{instagram(x)}</td>
+                    <td>{x.ultima_sincronizacion ? `sincronizado ${haceCuanto(x.ultima_sincronizacion)}` : x.instagram_estado ? "esperando la primera sincronización" : NADA}</td>
                     <td>{e.t === "Pendiente" ? <button className="btn" onClick={() => void revocar(x.id)}>Revocar</button> : null}</td>
                   </tr>
                 );

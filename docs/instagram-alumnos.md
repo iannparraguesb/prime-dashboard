@@ -49,6 +49,22 @@ si se activa, cualquiera crea una cuenta y el servidor la trata como alumno.
 | Registro e invitaciones | `backend/registro.mjs` |
 | Pantallas | `src/components/Login.tsx` (modo registro), `src/views/Alumnos.tsx` |
 | Pruebas | `pruebas/invitaciones-db.test.mjs` (PGlite), `pruebas/registro.test.mjs` |
+| Seguimiento por alumno (código → cuenta → Instagram → datos) | `supabase/migrations/0017_pipeline_alumnos.sql`, tabla de Ajustes → Alumnos |
+
+## Piloto con alumnos testers (app de Meta en modo desarrollo)
+
+Mientras la app no pase App Review, solo pueden conectar las cuentas de Instagram que tengan un rol en la app.
+
+1. **Vercel → Settings → Environment Variables → Production**: `SUPABASE_SERVICE_KEY`, `IG_APP_ID`,
+   `IG_APP_SECRET` e `IG_REDIRECT_URI=https://app.primeclubacademy.io/conectar/instagram`. Después, redeploy.
+   Sin `SUPABASE_SERVICE_KEY`, `/api/registro` responde "El registro de alumnos todavía no está habilitado".
+2. **Meta → la app → Instagram → API setup with Instagram login**: confirmar la redirect URI de arriba y copiar
+   el *Instagram app ID* y el *Instagram app secret* (no son el ID y el secreto de la app de Facebook).
+3. **Meta → App roles → Roles → Instagram Testers**: agregar el @ de cada alumno.
+4. Cada alumno acepta en Instagram: **Configuración → Apps y sitios web → Invitaciones de evaluador**.
+5. Crear un código por alumno en **Ajustes → Alumnos** y enviarlo **después** de los pasos 3 y 4.
+6. Seguir el avance en la misma tabla: Código usado → Cuenta → Instagram conectado → "sincronizado hace X".
+   La primera sincronización llega en menos de una hora (`ig_alumnos.py`, cada hora en GitHub Actions).
 
 Pendiente antes de abrir a todos: App Review de Meta, política de privacidad y callback de borrado de datos,
 miniaturas en bucket privado (A-04), re-auditoría con dos alumnos reales.

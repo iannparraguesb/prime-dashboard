@@ -8,6 +8,7 @@ import { readFile } from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
 
 const M0016 = await readFile(new URL('../supabase/migrations/0016_invitaciones_alumnos.sql', import.meta.url), 'utf8');
+const M0017 = await readFile(new URL('../supabase/migrations/0017_pipeline_alumnos.sql', import.meta.url), 'utf8');
 
 const SHIM = `
   create role anon nologin; create role authenticated nologin; create role service_role nologin bypassrls;
@@ -20,6 +21,12 @@ const SHIM = `
   alter default privileges in schema public grant all on tables to anon, authenticated, service_role;
   alter default privileges in schema public grant execute on functions to anon, authenticated, service_role;
   create table public.usuario (id uuid primary key, rol text);
+  -- Replica minima de 0008 para el seguimiento (0017).
+  create table auth.users (id uuid primary key, email text);
+  create table public.workspace (id uuid primary key default gen_random_uuid(), tipo text);
+  create table public.workspace_miembro (workspace_id uuid, usuario_id uuid);
+  create table public.instagram_conexion (workspace_id uuid, username text, estado text, ultima_sincronizacion timestamptz,
+    ultimo_error_publico text, actualizado_en timestamptz default now(), token_secreto text);
 `;
 
 const U = {
@@ -34,6 +41,8 @@ const db = new PGlite();
 await db.exec(SHIM);
 await db.exec(M0016);
 await db.exec(M0016); // idempotente
+await db.exec(M0017);
+await db.exec(M0017);
 await db.exec(`insert into public.usuario values ('${U.admin}', 'admin'), ('${U.lectura}', 'lectura');`);
 
 async function como(rol, usuario, sql, params = []) {
@@ -147,4 +156,36 @@ test('una cuenta no puede quedar ligada a dos codigos', async () => {
   await crear(H('c'));
   const id = await reservar(H('c'));
   await assert.rejects(fijo('service_role', null, 'select public.confirmar_invitacion_alumno($1, $2)', [id, U.alumno]), /unique|duplicate/);
+});
+
+test('seguimiento: admin ve codigo, cuenta e Instagram de cada alumno, sin datos secretos', async () => {
+  await crear(H('d'), 'Pipeline');
+  const id = await reservar(H('d'));
+  const alumna = '00000000-0000-4000-8000-0000000000e5';
+  await db.exec(`
+    insert into auth.users values ('${alumna}', 'alumna@ejemplo.test');
+    insert into public.workspace (id, tipo) values ('20000000-0000-4000-8000-0000000000e5', 'alumno');
+    insert into public.workspace_miembro values ('20000000-0000-4000-8000-0000000000e5', '${alumna}');
+    insert into public.instagram_conexion (workspace_id, username, estado, ultima_sincronizacion, token_secreto)
+      values ('20000000-0000-4000-8000-0000000000e5', 'alumna_fit', 'activa', now(), 'NO-DEBE-SALIR');
+  `);
+  await fijo('service_role', null, 'select public.confirmar_invitacion_alumno($1, $2)', [id, alumna]);
+  const filas = await como('authenticated', U.admin, 'select * from public.pipeline_alumnos()');
+  const f = filas.find((x) => x.nota === 'Pipeline');
+  assert.equal(f.correo, 'alumna@ejemplo.test');
+  assert.equal(f.instagram_username, 'alumna_fit');
+  assert.equal(f.instagram_estado, 'activa');
+  assert.ok(!JSON.stringify(filas).includes('NO-DEBE-SALIR'));
+  assert.ok(!Object.keys(f).includes('codigo_hash'));
+  // Un codigo sin usar aparece sin cuenta ni Instagram.
+  const pendiente = filas.find((x) => x.nota === 'Bea');
+  assert.equal(pendiente.correo, null);
+  assert.equal(pendiente.instagram_estado, null);
+});
+
+test('seguimiento: solo admin; el resto del equipo, alumnos y anon no', async () => {
+  for (const u of [U.lectura, U.alumno]) {
+    await assert.rejects(como('authenticated', u, 'select * from public.pipeline_alumnos()'), /sin_permiso/);
+  }
+  await assert.rejects(como('anon', null, 'select * from public.pipeline_alumnos()'), /permission denied/);
 });

@@ -109,12 +109,12 @@ const admin = { rol: "admin", jwt: "jwt-admin" };
 
 test("invitaciones: solo admin, y con su JWT, nunca con la service key", async () => {
   await assert.rejects(rutaInvitaciones({ method: "GET" }, res(), { rol: "lectura", jwt: "j" }, ENV), (e) => e.status === 403);
-  const llamadas = simular({ "invitacion_alumno?select": [200, [{ id: ID, nota: "Ana" }]] });
+  const llamadas = simular({ "rpc/pipeline_alumnos": [200, [{ id: ID, nota: "Ana", instagram_estado: "activa" }]] });
   const r = res();
   await rutaInvitaciones({ method: "GET" }, r, admin, ENV);
   assert.equal(JSON.parse(r.cuerpo).filas[0].nota, "Ana");
   assert.equal(llamadas[0].op.headers.authorization, "Bearer jwt-admin");
-  assert.ok(!llamadas[0].url.includes("codigo_hash"));
+  assert.equal(llamadas[0].op.headers.apikey, "anon");
 });
 
 test("crear invitacion devuelve el codigo una vez y a la base solo le llega su hash", async () => {

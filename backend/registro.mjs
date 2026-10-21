@@ -2,7 +2,7 @@
  * Autoregistro de alumnos con codigo de invitacion.
  *
  *   POST /api/registro        <- { email, clave, codigo }   publico, con cuota por IP
- *   GET  /api/invitaciones    -> { filas }                  admin
+ *   GET  /api/invitaciones    -> { filas }                  admin; codigo, cuenta e Instagram de cada uno
  *   POST /api/invitaciones    <- { nota }  -> { codigo }    admin; el codigo se muestra una sola vez
  *   DELETE /api/invitaciones  <- { id }                     admin; revoca si no se uso
  *
@@ -115,8 +115,9 @@ export async function rutaInvitaciones(req, res, user, env) {
   if (user.rol !== "admin") throw new HttpError(403, "Solo administración puede invitar alumnos.");
   const c = config(env);
   if (req.method === "GET") {
-    const r = await llamar(c, "/rest/v1/invitacion_alumno?select=id,nota,creado_en,expira_en,usado_en,revocado_en&order=creado_en.desc&limit=200",
-      { metodo: "GET", jwt: user.jwt });
+    // Codigo -> cuenta -> Instagram -> sincronizacion (migracion 0017). Con el
+    // JWT del admin: la funcion revisa el rol y no devuelve hash ni tokens.
+    const r = await llamar(c, "/rest/v1/rpc/pipeline_alumnos", { cuerpo: {}, jwt: user.jwt });
     if (!r.ok) falla(r);
     return json(res, { filas: r.datos ?? [] });
   }
