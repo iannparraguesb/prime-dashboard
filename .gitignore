@@ -17,3 +17,4 @@ graphify-out/*
 
 # Snapshots temporales de la ingesta (se regeneran en cada corrida)
 ingesta/data/
+__pycache__/

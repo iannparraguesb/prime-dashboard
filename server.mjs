@@ -505,13 +505,15 @@ async function construirAnalisis(jwt, seccion = "completo", cuentaId) {
     // cuenta. Paso: mostro 751.269 de @therealbrianmark en vez de 106.345.
     traer("cuenta_metrica", `select=*&${deCuenta}&order=fecha_snapshot.desc&limit=90`, jwt),
     traer("config", "select=clave,valor", jwt),
-    si(necesita("piezas"), "pieza_metrica", "select=post_id,fecha_snapshot,fuente,interacciones_totales"),
+    // Filtrada por cuenta via pieza: sin filtro el equipo leia tambien las
+    // metricas de competidores y alumnos, y la tabla paso de MAX_FILAS (422).
+    si(necesita("piezas"), "pieza_metrica", `select=post_id,fecha_snapshot,fuente,interacciones_totales,pieza!inner(cuenta_id)&pieza.${deCuenta}`),
     si(necesita("audiencia"), "audiencia_snapshot", `select=corte,clave,valor,fecha_snapshot&${deCuenta}&order=fecha_snapshot.desc`),
     si(necesita("historias", "calendario", "resumen"), "historia", `select=*&${deCuenta}`),
     si(necesita("historias", "calendario", "resumen"), "historia_metrica", "select=*&order=fecha_snapshot.desc"),
     si(necesita("competencia"), "cuenta", "select=id,username,es_propia"),
     si(necesita("competencia"), "pieza", "select=post_id,cuenta_id,permalink,fecha_publicacion,formato,primera_linea,thumb_path&cuenta_id=like.externa:*"),
-    si(necesita("competencia"), "pieza_metrica", "select=post_id,likes,comentarios,fecha_snapshot&order=fecha_snapshot.desc"),
+    si(necesita("competencia"), "pieza_metrica", "select=post_id,likes,comentarios,fecha_snapshot,pieza!inner(cuenta_id)&pieza.cuenta_id=like.externa:*&order=fecha_snapshot.desc"),
     si(necesita("competencia"), "cuenta_metrica", "select=cuenta_id,seguidores,publicaciones,fecha_snapshot&order=fecha_snapshot.desc"),
     si(necesita("anuncios"), "v_anuncio", "select=*"),
     si(necesita("anuncios"), "v_campana", "select=*"),

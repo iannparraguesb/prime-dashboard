@@ -17,7 +17,7 @@ function simular(respuestas) {
     llamadas.push({ url: String(url), op });
     const clave = Object.keys(respuestas).find((k) => String(url).includes(k));
     const [estado, cuerpo] = respuestas[clave] ?? [404, {}];
-    return new Response(JSON.stringify(cuerpo), { status: estado });
+    return new Response(estado === 204 ? null : JSON.stringify(cuerpo), { status: estado });
   };
   return llamadas;
 }
@@ -83,6 +83,42 @@ test("un state malformado o un state consumido no avanzan", async () => {
   await assert.rejects(rutaInstagram(req({ code: "x", state: "corto" }), res(), alumno, "/api/instagram/callback", ENV), /no es válido/);
   simular({ "/rpc/consumir_estado_oauth": [200, []] });
   await assert.rejects(rutaInstagram(req({ code: "x", state: "A".repeat(43) }), res(), alumno, "/api/instagram/callback", ENV), /venció o ya se usó/);
+});
+
+// Callback completo: state valido, Meta responde, la conexion se guarda.
+const CONECTA = {
+  "/rpc/consumir_estado_oauth": [200, [{ workspace_id: "w", redirect_uri: ENV.IG_REDIRECT_URI }]],
+  ...FELIZ,
+  "/rpc/guardar_conexion_instagram": [200, null],
+};
+const ALUMNO = { tipo: "alumno", id: "00000000-0000-4000-8000-00000000000a", jwt: "j" };
+const CON_GH = { ...ENV, GH_WORKFLOW_TOKEN: "gh-token", GH_REPO: "iannparraguesb/prime-dashboard" };
+const DISPATCH = "api.github.com/repos/iannparraguesb/prime-dashboard/actions/workflows/sync-instagram.yml/dispatches";
+
+test("conectar pide la sincronizacion a GitHub sin esperar el cron", async () => {
+  const llamadas = simular({ ...CONECTA, [DISPATCH]: [204, null] });
+  const r = res();
+  await rutaInstagram(req({ code: "x", state: "A".repeat(43) }), r, ALUMNO, "/api/instagram/callback", CON_GH);
+  assert.deepEqual(JSON.parse(r.cuerpo), { ok: true, username: "coach_ana" });
+  const gh = llamadas.find((l) => l.url.includes(DISPATCH));
+  assert.ok(gh, "se llamo al workflow");
+  assert.equal(gh.op.headers.authorization, "Bearer gh-token");
+  assert.deepEqual(JSON.parse(gh.op.body), { ref: "main" });
+});
+
+test("sin token de GitHub la conexion se guarda igual y no se llama a GitHub", async () => {
+  const llamadas = simular(CONECTA);
+  const r = res();
+  await rutaInstagram(req({ code: "x", state: "A".repeat(43) }), r, ALUMNO, "/api/instagram/callback", ENV);
+  assert.equal(JSON.parse(r.cuerpo).ok, true);
+  assert.ok(!llamadas.some((l) => l.url.includes("api.github.com")));
+});
+
+test("si GitHub rechaza el disparo, el alumno igual queda conectado", async () => {
+  simular({ ...CONECTA, [DISPATCH]: [401, { message: "Bad credentials" }] });
+  const r = res();
+  await rutaInstagram(req({ code: "x", state: "A".repeat(43) }), r, ALUMNO, "/api/instagram/callback", CON_GH);
+  assert.equal(JSON.parse(r.cuerpo).ok, true);
 });
 
 test("iniciar guarda solo el hash del state", async () => {

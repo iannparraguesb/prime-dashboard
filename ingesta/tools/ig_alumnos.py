@@ -120,7 +120,9 @@ def sincronizar(con, limite, fecha):
 
     # Miniaturas: las URLs de Instagram caducan; se copian al bucket las que falten.
     por_id = {p["id"]: p for p in piezas}
-    faltan = sb.rest(f"pieza?select=post_id&cuenta_id=eq.{urllib.parse.quote(cid)}&thumb_path=is.null&limit=60")
+    # Las mas recientes primero: solo esas traen URL en esta pasada (100 la primera vez).
+    faltan = sb.rest(f"pieza?select=post_id&cuenta_id=eq.{urllib.parse.quote(cid)}&thumb_path=is.null"
+                     "&order=fecha_publicacion.desc.nullslast&limit=100")
     guardadas = 0
     for f in faltan or []:
         media = por_id.get(f["post_id"])
