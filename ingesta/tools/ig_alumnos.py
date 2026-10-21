@@ -97,7 +97,8 @@ def sincronizar(con, limite, fecha):
     with tempfile.TemporaryDirectory() as tmp:
         piezas = ig.traer_piezas(cid, limite, {}, pathlib.Path(tmp) / "ckpt.json")
     historias = (ig.traer_historias(cid) or {}).get("filas") or []
-    audiencia = ig.traer_audiencia(cid)
+    # Sin timeframe, graph.instagram.com devuelve los desgloses vacios (v20+).
+    audiencia = ig.traer_audiencia(cid, timeframe="this_month")
 
     # cuenta: sin es_propia, para no tocar el false que fijo la conexion.
     sb.upsert("cuenta", [{"id": cid, "username": cuenta.get("username"), "nombre": cuenta.get("name")}], "id")
@@ -120,6 +121,8 @@ def sincronizar(con, limite, fecha):
     # Un desglose vacio no siempre es "menos de 100 seguidores": que quede en el log lo que dijo Meta.
     for corte, motivo in (audiencia.get("errores") or {}).items():
         print(f"  ! @{cuenta.get('username')}: audiencia {corte} sin datos ({motivo[:160]})", file=sys.stderr)
+    if not aud and not audiencia.get("errores"):
+        print(f"  ! @{cuenta.get('username')}: Meta respondio la audiencia sin desglose", file=sys.stderr)
 
     # Miniaturas: las URLs de Instagram caducan; se copian al bucket las que falten.
     por_id = {p["id"]: p for p in piezas}

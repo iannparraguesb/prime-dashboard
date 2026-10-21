@@ -306,13 +306,15 @@ def traer_historias(ig):
     return {"filas": filas}
 
 
-def traer_audiencia(ig):
-    """follower_demographics necesita 100+ seguidores y metric_type=total_value."""
+def traer_audiencia(ig, **extra):
+    """follower_demographics necesita 100+ seguidores y metric_type=total_value.
+    `extra` va tal cual a la consulta: con Instagram Login (graph.instagram.com)
+    hay que pasar timeframe, o responde vacio y sin error."""
     salida = {}
     for corte in ("city", "country", "age", "gender"):
         try:
             payload = api(f"{ig}/insights", metric="follower_demographics",
-                          period="lifetime", metric_type="total_value", breakdown=corte)
+                          period="lifetime", metric_type="total_value", breakdown=corte, **extra)
             filas = payload.get("data", [])
             res = {}
             for f in filas:
