@@ -214,7 +214,7 @@ export default function App() {
               case "historias":
                 return <Historias d={d} />;
               case "competencia":
-                return <Competencia key={s.sesion?.user.id} d={d} jwt={jwt} />;
+                return <Competencia key={s.sesion?.user.id} d={d} jwt={jwt} recargar={estado.recargar} editable={yo.rol !== "lectura"} />;
               case "audiencia":
                 return <Audiencia d={d} />;
               case "anuncios":

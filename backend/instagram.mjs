@@ -112,13 +112,17 @@ export async function intercambiar(c, code, redirect) {
  *  esperar el cron (GitHub lo atrasa hasta 10 h). Nunca lanza: la conexion ya
  *  quedo guardada y, si esto falla, el cron la recoge igual. */
 export async function dispararSincronizacion(c) {
-  const { token, repo, ref } = c.gh;
+  return dispararWorkflow(c.gh, "sync-instagram.yml");
+}
+
+/** Lo mismo para cualquier workflow del repo. `gh` = { token, repo, ref }. */
+export async function dispararWorkflow({ token, repo, ref = "main" }, archivo) {
   if (!token || !repo) {
-    console.error(JSON.stringify({ evento: "instagram_sync_sin_disparo" }));
+    console.error(JSON.stringify({ evento: "instagram_sync_sin_disparo", workflow: archivo }));
     return false;
   }
   try {
-    const r = await fetch(`https://api.github.com/repos/${repo}/actions/workflows/sync-instagram.yml/dispatches`, {
+    const r = await fetch(`https://api.github.com/repos/${repo}/actions/workflows/${archivo}/dispatches`, {
       method: "POST",
       signal: AbortSignal.timeout(8000),
       headers: {

@@ -26,7 +26,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { HttpError, json, readBody, textField, uuid, rateLimit, reportError } from "./backend/security.mjs";
 import { sugerencias } from "./backend/ideas.mjs";
-import { rutaInstagram } from "./backend/instagram.mjs";
+import { rutaInstagram, dispararWorkflow } from "./backend/instagram.mjs";
 import { atribuirVentas, claveInstagram } from "./backend/atribucion.mjs";
 import { registrarAlumno, rutaInvitaciones } from "./backend/registro.mjs";
 
@@ -485,7 +485,7 @@ async function construirAnalisis(jwt, seccion = "completo", cuentaId) {
     metricasCuenta,
     anunciosFilas,
     campanasFilas,
-  
+    vigiladas,
   ] = await Promise.all([
     // Solo la cuenta propia. Desde que se cargan competidores, v_pieza_ranking
     // tambien trae sus piezas, y contarlas inflaba n_total y metia sus posts en
@@ -518,6 +518,9 @@ async function construirAnalisis(jwt, seccion = "completo", cuentaId) {
     si(necesita("competencia"), "cuenta_metrica", "select=cuenta_id,seguidores,publicaciones,fecha_snapshot&cuenta_id=like.externa:*&order=fecha_snapshot.desc,cuenta_id"),
     si(necesita("anuncios"), "v_anuncio", "select=*"),
     si(necesita("anuncios"), "v_campana", "select=*"),
+    // Quitar un competidor lo desactiva: sus piezas siguen en la base, pero
+    // Espia y las ideas solo muestran los activos.
+    si(necesita("competencia"), "cuenta_vigilada", "select=username&activa=is.true&order=username"),
   ]);
 
   // n_total son las piezas DENTRO DE LA VENTANA de analisis (config.ventana_meses).
@@ -596,7 +599,7 @@ async function construirAnalisis(jwt, seccion = "completo", cuentaId) {
           activas: 0,
           capturadas: null,
         },
-        competencia: construirCompetencia(cuentasTodas, piezasExternas, metricasCuenta, metricasExternas),
+        competencia: construirCompetencia(cuentasTodas, piezasExternas, metricasCuenta, metricasExternas, vigiladas),
         token: estadoToken(),
         anuncios: construirAnuncios(anunciosFilas, campanasFilas),
         mesa,
@@ -779,7 +782,7 @@ async function construirAnalisis(jwt, seccion = "completo", cuentaId) {
     })),
     audiencia: construirAudiencia(audienciaFilas, ultima),
     historias: construirHistorias(historiasFilas, historiasMetricas),
-    competencia: construirCompetencia(cuentasTodas, piezasExternas, metricasCuenta, metricasExternas),
+    competencia: construirCompetencia(cuentasTodas, piezasExternas, metricasCuenta, metricasExternas, vigiladas),
     token: estadoToken(),
     anuncios: construirAnuncios(anunciosFilas, campanasFilas),
     mesa,
@@ -850,8 +853,9 @@ function construirHistorias(historias, metricas) {
 /** Competencia: de cuentas ajenas la API solo entrega likes y comentarios. Sin
  *  alcance no hay tasa de guardado, y por eso se compara interaccion sobre
  *  seguidores y no se rankea junto al contenido propio. */
-function construirCompetencia(cuentas, piezas, metricas, metricasPieza) {
-  const externas = cuentas.filter((c) => c.es_propia === false);
+function construirCompetencia(cuentas, piezas, metricas, metricasPieza, vigiladas = []) {
+  const activas = new Set(vigiladas.map((v) => `externa:${v.username}`));
+  const externas = cuentas.filter((c) => c.es_propia === false && activas.has(c.id));
   const seguidoresPor = new Map();
   for (const m of metricas) if (!seguidoresPor.has(m.cuenta_id)) seguidoresPor.set(m.cuenta_id, m);
   // likes y comentarios por pieza: es lo UNICO que la API entrega de terceros.
@@ -1416,11 +1420,27 @@ async function atender(req, res) {
     const entrada = textField(cuerpo.username ?? cuerpo.url, "Usuario", 200);
     const username = normalizarUsuario(entrada);
     if (!username) throw new HttpError(400, "Escribe un usuario o una URL de perfil de Instagram válida.");
-    const r = await rest("cuenta_vigilada", { metodo: "POST", jwt, prefer: "return=representation",
-      cuerpo: [{ username, url: `https://www.instagram.com/${username}/`,
-        nombre: textField(cuerpo.nombre, "Nombre", 120, true), nota: textField(cuerpo.nota, "Nota", 1000, true) }] });
+    // Una cuenta quitada antes se reactiva en vez de duplicarse; una con error
+    // se vuelve a poner en cola. Asi "agregar" sirve tambien de "reintentar".
+    const { filas, activos } = await listarCompetidores(jwt);
+    const existente = filas.find((f) => f.username === username);
+    if (existente?.activa && existente.estado !== "error") throw new HttpError(409, `@${username} ya está en tu lista.`);
+    if (!existente?.activa && activos >= TOPE_COMPETIDORES) {
+      throw new HttpError(409, `Ya sigues ${TOPE_COMPETIDORES} competidores. Quita uno para agregar otro.`);
+    }
+    const r = existente
+      ? await rest(`cuenta_vigilada?id=eq.${uuid(existente.id)}`, { metodo: "PATCH", jwt, prefer: "return=representation",
+          cuerpo: { activa: true, estado: "pendiente", ultimo_error: null } })
+      : await rest("cuenta_vigilada", { metodo: "POST", jwt, prefer: "return=representation",
+          cuerpo: [{ username, url: `https://www.instagram.com/${username}/`,
+            nombre: textField(cuerpo.nombre, "Nombre", 120, true), nota: textField(cuerpo.nota, "Nota", 1000, true) }] });
     comprobarEscritura(r);
-    return json(res, { ok: true, competidor: r.datos?.[0] }, 201);
+    // Analisis inmediato en GitHub Actions. Si no hay token, la cuenta queda en
+    // cola y la recoge la sincronizacion diaria: el panel avisa cual de las dos.
+    const inmediato = await dispararWorkflow(
+      { token: ENV.GH_WORKFLOW_TOKEN || "", repo: ENV.GH_REPO || "", ref: ENV.GH_WORKFLOW_REF || "main" },
+      "competencia.yml");
+    return json(res, { ok: true, competidor: r.datos?.[0], inmediato }, 201);
   }
   const id = uuid(cuerpo.id);
   if (req.method === "PATCH" && typeof cuerpo.activa !== "boolean") throw new HttpError(400, "Indica si la cuenta está activa.");

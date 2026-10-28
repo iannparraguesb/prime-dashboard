@@ -11,7 +11,7 @@
     "check": "tsc --noEmit",
     "preview": "vite preview",
     "test": "node --test pruebas/*.test.mjs",
-    "test:unit": "node --test pruebas/instagram.test.mjs pruebas/alumnos-db.test.mjs pruebas/ideas.test.mjs pruebas/n1-puros.test.mjs pruebas/secuencias.test.mjs pruebas/atribucion.test.mjs pruebas/metas.test.mjs pruebas/metas-db.test.mjs pruebas/registro.test.mjs pruebas/invitaciones-db.test.mjs pruebas/seguridad.test.mjs pruebas/multiusuario.test.mjs pruebas/multiusuario-db.test.mjs",
+    "test:unit": "node --test pruebas/instagram.test.mjs pruebas/alumnos-db.test.mjs pruebas/ideas.test.mjs pruebas/n1-puros.test.mjs pruebas/secuencias.test.mjs pruebas/atribucion.test.mjs pruebas/metas.test.mjs pruebas/metas-db.test.mjs pruebas/registro.test.mjs pruebas/invitaciones-db.test.mjs pruebas/seguridad.test.mjs pruebas/multiusuario.test.mjs pruebas/multiusuario-db.test.mjs pruebas/competidores.test.mjs",
     "test:integration": "node --test pruebas/n2-supabase.test.mjs pruebas/n3-api.test.mjs"
   },
   "dependencies": {

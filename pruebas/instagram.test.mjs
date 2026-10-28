@@ -1,6 +1,6 @@
 import { test, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { configuracion, hashEstado, urlAutorizacion, intercambiar, rutaInstagram } from "../backend/instagram.mjs";
+import { configuracion, hashEstado, urlAutorizacion, intercambiar, rutaInstagram, dispararWorkflow } from "../backend/instagram.mjs";
 
 const ENV = {
   IG_APP_ID: "123", IG_APP_SECRET: "secreto-app", IG_REDIRECT_URI: "https://app.primeclubacademy.io/conectar/instagram",
@@ -130,4 +130,20 @@ test("iniciar guarda solo el hash del state", async () => {
   assert.equal(enviado.p_hash, hashEstado(estado));
   assert.ok(!llamadas[0].op.body.includes(estado), "el state en claro no llega a la base");
   assert.equal(llamadas[0].op.headers.authorization, "Bearer jwt-alumno", "se crea con la sesion del alumno, no con service_role");
+});
+
+test("agregar un competidor dispara solo el workflow de competencia", async () => {
+  const destino = "api.github.com/repos/iannparraguesb/prime-dashboard/actions/workflows/competencia.yml/dispatches";
+  const llamadas = simular({ [destino]: [204, null] });
+  const ok = await dispararWorkflow({ token: "gh-token", repo: "iannparraguesb/prime-dashboard" }, "competencia.yml");
+  assert.equal(ok, true);
+  assert.equal(llamadas.length, 1);
+  assert.ok(llamadas[0].url.includes(destino));
+  assert.deepEqual(JSON.parse(llamadas[0].op.body), { ref: "main" });
+});
+
+test("sin token el competidor queda en cola para el cron, sin llamar a GitHub", async () => {
+  const llamadas = simular({});
+  assert.equal(await dispararWorkflow({ token: "", repo: "" }, "competencia.yml"), false);
+  assert.equal(llamadas.length, 0);
 });
