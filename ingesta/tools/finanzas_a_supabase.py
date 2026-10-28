@@ -88,11 +88,17 @@ def main():
     cobertura("meta", a.desde, a.hasta, "Meta Marketing API, cuenta act_1059963115650620 (CLP, America/Santiago)")
 
     meses = sorted({x["date_start"][:7] for x in meta} | {a.desde[:7], a.hasta[:7]})
-    tc = fx.dolar_mensual(meses)
-    upsert("negocio_dolar", [{"mes": f"{m}-01", "clp_por_usd": v, "dias": n,
-                              "fuente": f"Promedio dólar observado, mindicador.cl (Banco Central), consultado {dt.date.today()}"}
-                             for m, (v, n) in tc.items() if v])
-    cobertura("dolar", f"{meses[0]}-01", a.hasta, "mindicador.cl/api/dolar")
+    # Si mindicador.cl no responde, queda el dolar ya cargado y se sigue: antes
+    # esto cortaba la corrida y GHL (las ventas) no se cargaba.
+    try:
+        tc = fx.dolar_mensual(meses)
+    except Exception as e:  # noqa: BLE001
+        print(f"  ! Dólar sin actualizar ({e}). Se conserva el último cargado.", file=sys.stderr)
+    else:
+        upsert("negocio_dolar", [{"mes": f"{m}-01", "clp_por_usd": v, "dias": n,
+                                  "fuente": f"Promedio dólar observado, mindicador.cl (Banco Central), consultado {dt.date.today()}"}
+                                 for m, (v, n) in tc.items() if v])
+        cobertura("dolar", f"{meses[0]}-01", a.hasta, "mindicador.cl/api/dolar")
 
     print("GoHighLevel…")
     try:

@@ -73,6 +73,12 @@ def http_json(url, headers=None, data=None):
                 time.sleep(2 ** intento * 3)
                 continue
             raise RuntimeError(f"HTTP {e.code}: {e.read().decode()[:300]}") from None
+        except (urllib.error.URLError, TimeoutError, ConnectionError) as e:
+            # Red cortada, SSL EOF o lectura vencida: tambien son pasajeros.
+            if intento < 3:
+                time.sleep(2 ** intento * 3)
+                continue
+            raise RuntimeError(f"Sin respuesta de {urllib.parse.urlsplit(url).netloc}: {e}") from None
 
 
 # ---------- Meta ----------
