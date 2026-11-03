@@ -166,6 +166,8 @@ export interface PeriodoNegocio {
   asistieron: Numerico;
   ventas: Numerico;
   ingresos_usd: Numerico;
+  /** Facturacion menos la comision de Mercado Pago. */
+  ingresos_neto_usd: Numerico;
   cerradas_ghl: Numerico;
   show_rate: Numerico;
   close_rate: Numerico;

@@ -987,6 +987,10 @@ const dividir = (a, b, escala = 1, decimales = 2) =>
   a === null || b === null || !b ? null : redondear((a / b) * escala, decimales);
 const normalizarNombre = (t) => String(t ?? "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").split(/\s+/).filter(Boolean).join(" ");
 
+// Mercado Pago cobra lo mismo en cada link de pago: 45.600 de 1.200.000
+// (comprobante del 31-10-2026). Se descuenta a todas las ventas.
+const COMISION_MERCADO_PAGO = 0.038;
+
 async function construirNegocio(jwt, deCuenta) {
   const [gasto, dolar, agendas, leads, llamadas, cargas] = await Promise.all([
     traer("negocio_gasto_diario", "select=*", jwt),
@@ -1071,6 +1075,7 @@ async function construirNegocio(jwt, deCuenta) {
       asistieron,
       ventas,
       ingresos_usd: ingresos,
+      ingresos_neto_usd: ingresos === null ? null : redondear(ingresos * (1 - COMISION_MERCADO_PAGO), 2),
       cerradas_ghl: cerradasGhl,
       // Tasas en porcentaje (regla 1). Show rate sobre llamadas con resultado
       // anotado: una llamada de manana sin anotar no es una inasistencia.

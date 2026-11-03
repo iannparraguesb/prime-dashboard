@@ -97,7 +97,7 @@ function Kpis({ m, previo }: { m: PeriodoNegocio; previo: PeriodoNegocio | null 
       <div className="card kpi">
         <div className="kpi-lbl"><Icono nombre="dinero" size={18} /> Facturación</div>
         <div className="kpi-val num">{usd(m.ingresos_usd)}</div>
-        <div className="kpi-pie">{m.ingresos_usd === null ? "sin registro de ventas este mes" : `en ${nombreMes(m.inicio)}`}</div>
+        <div className="kpi-pie">{m.ingresos_usd === null ? "sin registro de ventas este mes" : `en ${nombreMes(m.inicio)} · ${usd(m.ingresos_neto_usd)} después de la comisión de Mercado Pago`}</div>
       </div>
       <div className="card kpi">
         <div className="kpi-lbl"><Icono nombre="perfil" size={18} /> Clientes nuevos</div>
