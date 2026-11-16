@@ -6,7 +6,7 @@ import { ConectarInstagram, RegresoInstagram } from "./views/Instagram";
 import { useSesion } from "./hooks/useSesion";
 import { Login } from "./components/Login";
 import { BarraSuperior } from "./components/BarraSuperior";
-import { Vista, EsqueletoGrilla, Pronto } from "./components/states";
+import { Vista, EsqueletoGrilla } from "./components/states";
 import { Icono, type NombreIcono } from "./components/icons";
 const Resumen = lazy(() => import("./views/Resumen").then(m => ({ default: m.Resumen })));
 const Piezas = lazy(() => import("./views/Piezas").then(m => ({ default: m.Piezas })));
@@ -44,10 +44,9 @@ const PRINCIPAL: Seccion[] = ["resumen", "piezas", "historias", "competencia", "
 const HERRAMIENTAS: Seccion[] = ["calendario", "palabra-clave"];
 const AJUSTES: Seccion[] = ["alumnos", "instagram"];
 
-/** Lo que ve un alumno: su contenido y su conexion. Nada del negocio de Leo. */
-const DEL_ALUMNO: Seccion[] = ["resumen", "calendario", "piezas", "historias", "audiencia", "instagram"];
-/** En el menu del alumno pero todavia cerradas: muestran "Pronto" y no piden datos. */
-const PRONTO_ALUMNO: Seccion[] = ["competencia"];
+/** Lo que ve un alumno: su contenido, su conexion y Espia con sus propios
+ *  competidores. Nada del negocio de Leo. */
+const DEL_ALUMNO: Seccion[] = ["resumen", "calendario", "piezas", "historias", "competencia", "audiencia", "instagram"];
 
 const ROLES: { id: Rol; texto: string; entrada: Seccion }[] = [
   { id: "direccion", texto: "Dirección", entrada: "resumen" },
@@ -74,14 +73,12 @@ export default function App() {
   const conectado = !!yo?.instagram && ["activa", "vencida", "error"].includes(yo.instagram.estado);
   // Invitar alumnos es solo de admin: el resto del equipo ni ve la entrada.
   const permitida = (id: Seccion) => (esAlumno ? DEL_ALUMNO.includes(id) : id !== "instagram" && (id !== "alumnos" || yo?.rol === "admin"));
-  const enMenu = (id: Seccion) => permitida(id) || (esAlumno && PRONTO_ALUMNO.includes(id));
   // Un alumno sin Instagram conectado no tiene datos que mostrar: va directo a conectar.
   const vista: Seccion = esAlumno
-    ? (!conectado ? "instagram" : enMenu(seccion) ? seccion : "resumen")
+    ? (!conectado ? "instagram" : permitida(seccion) ? seccion : "resumen")
     : permitida(seccion) ? seccion : "resumen";
-  const pronto = esAlumno && PRONTO_ALUMNO.includes(vista);
-  // Estas vistas no leen /api/analisis: cada una trae lo suyo, o nada todavia.
-  const sinAnalisis = vista === "instagram" || vista === "alumnos" || pronto;
+  // Estas vistas no leen /api/analisis: cada una trae lo suyo.
+  const sinAnalisis = vista === "instagram" || vista === "alumnos";
   const estado = useApi<Analisis>(`/api/analisis?seccion=${vista}`, yo && !sinAnalisis ? jwt : null);
   const elegir = (id: Seccion) => { setSeccion(id); window.history.replaceState(null,"",`#${id}`); window.scrollTo({ top: 0 }); };
 
@@ -108,7 +105,6 @@ export default function App() {
       <button key={id} aria-current={vista === id} onClick={() => elegir(id)}>
         <Icono nombre={x.icono} size={17} />
         {x.texto}
-        {esAlumno && PRONTO_ALUMNO.includes(id) ? <span className="nav-pronto">Pronto</span> : null}
       </button>
     );
   };
@@ -127,7 +123,7 @@ export default function App() {
         </div>
 
         <div className="nav">
-          <div className="nav-grupo">{PRINCIPAL.filter(enMenu).map(boton)}</div>
+          <div className="nav-grupo">{PRINCIPAL.filter(permitida).map(boton)}</div>
         </div>
 
         <div className="nav nav-abajo">
@@ -193,12 +189,6 @@ export default function App() {
 
         {vista === "instagram" ? <ConectarInstagram yo={yo} jwt={jwt} recargar={recargarYo} /> : vista === "alumnos" ? (
           <Suspense fallback={<EsqueletoGrilla />}><Alumnos jwt={jwt} /></Suspense>
-        ) : pronto ? (
-          <Pronto
-            icono="competencia"
-            titulo="Espía llega pronto"
-            texto="Vas a poder agregar hasta 5 cuentas de tu competencia y ver qué publican, cuánta interacción logran y cómo te comparas con ellas. Estamos terminando esta sección: si ya tienes en mente qué cuentas vigilar, cuéntaselo al equipo de Prime Club."
-          />
         ) : (
         <Suspense fallback={<EsqueletoGrilla />}><Vista estado={estado} esqueleto={vista === "piezas" ? <EsqueletoGrilla /> : undefined}>
           {(d) => {
@@ -214,7 +204,7 @@ export default function App() {
               case "historias":
                 return <Historias d={d} />;
               case "competencia":
-                return <Competencia key={s.sesion?.user.id} d={d} jwt={jwt} recargar={estado.recargar} editable={yo.rol !== "lectura"} />;
+                return <Competencia key={s.sesion?.user.id} d={d} jwt={jwt} recargar={estado.recargar} editable={yo.rol !== "lectura"} conIdeas={!esAlumno} />;
               case "audiencia":
                 return <Audiencia d={d} />;
               case "anuncios":

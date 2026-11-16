@@ -52,7 +52,9 @@ interface Lista {
 
 const EN_CURSO = new Set<Vigilada["estado"]>(["pendiente", "analizando"]);
 
-export function Competencia({ d, jwt, recargar, editable }: { d: Analisis; jwt: string | null; recargar: () => void; editable: boolean }) {
+/** `conIdeas`: el banco de ideas es del equipo. Un alumno ve Espia completo,
+ *  sin el boton que guarda ahi. */
+export function Competencia({ d, jwt, recargar, editable, conIdeas }: { d: Analisis; jwt: string | null; recargar: () => void; editable: boolean; conIdeas: boolean }) {
   const [lista, setLista] = useState<Lista | null>(null);
   const [entrada, setEntrada] = useState("");
   const [guardando, setGuardando] = useState(false);
@@ -389,9 +391,11 @@ export function Competencia({ d, jwt, recargar, editable }: { d: Analisis; jwt: 
                   <span title="Comentarios"><Icono nombre="comentario" size={12} /> {compacto(p.comentarios)}</span>
                   <small>{fechaCorta(p.fecha)}</small>
                 </div>
-                <button className="btn" disabled={guardadas.has(p.id)} onClick={() => void guardarIdea(p)}>
-                  {guardadas.has(p.id) ? "Guardada en tu banco" : "Guardar idea"}
-                </button>
+                {conIdeas ? (
+                  <button className="btn" disabled={guardadas.has(p.id)} onClick={() => void guardarIdea(p)}>
+                    {guardadas.has(p.id) ? "Guardada en tu banco" : "Guardar idea"}
+                  </button>
+                ) : null}
               </div>
             </article>
           ))}

@@ -1,14 +1,21 @@
 #!/usr/bin/env python3
 """
-Analiza los competidores que el equipo agrego desde el panel.
+Analiza los competidores que el equipo y los alumnos agregaron desde el panel.
 
 Uso:
     python3 tools/ig_competencia.py            # solo los pendientes
     python3 tools/ig_competencia.py --todos    # reanaliza todos los activos
 
-Lee `cuenta_vigilada` (lo que Leo escribe en el panel), consulta a Instagram con
+Lee `cuenta_vigilada` (lo que se escribe en Espia), consulta a Instagram con
 business_discovery, y guarda las piezas en `pieza` / `pieza_metrica` con
 fuente='api' bajo una cuenta `externa:<username>`.
+
+Cada dueño tiene su lista (la del equipo, o la de un alumno: `workspace_id`),
+pero los datos de una cuenta ajena se guardan UNA vez. Si Leo y tres alumnos
+vigilan a la misma cuenta, se le pregunta a Instagram una sola vez y se marcan
+las cuatro filas. Y una cuenta que ya se leyo hoy no se vuelve a pedir cuando
+otro la agrega: queda lista al instante con los datos que ya estan. Todo sale
+del mismo token (el de Leo), asi que cada llamada ahorrada cuenta.
 
 --- El limite que hay que tener presente ---
 
@@ -154,38 +161,57 @@ def main():
         raise SystemExit("Falta IG_ACCESS_TOKEN o IG_BUSINESS_ID en .env")
 
     filtro = "&estado=eq.pendiente" if not args.todos else ""
-    vigiladas = rest(f"cuenta_vigilada?select=*&activa=is.true{filtro}")
+    vigiladas = rest(f"cuenta_vigilada?select=*&activa=is.true{filtro}&order=agregada_en")
     if not vigiladas:
         print("Nada que analizar." if args.todos else
               "Sin competidores pendientes. Usa --todos para reanalizar los activos.")
         return 0
 
+    # Una cuenta puede estar en varias listas: se analiza una vez por usuario.
+    grupos = {}
+    for v in vigiladas:
+        grupos.setdefault(v["username"], []).append(v)
+
     hoy = datetime.date.today().isoformat()
-    print(f"{len(vigiladas)} cuenta(s) por analizar\n")
+    # Las que ya se leyeron hoy. `cuenta_metrica` se escribe al final de cada
+    # analisis, asi que su fila de hoy significa "analisis completo".
+    frescas = set()
+    if not args.todos:
+        en = ",".join(f'"externa:{u}"' for u in grupos)
+        frescas = {f["cuenta_id"].removeprefix("externa:") for f in rest(
+            "cuenta_metrica?select=cuenta_id&fuente=eq.api"
+            f"&fecha_snapshot=eq.{hoy}&cuenta_id=in.({urllib.parse.quote(en)})")}
+
+    def marcar(filas, cambios_por_fila):
+        for v in filas:
+            rest(f"cuenta_vigilada?id=eq.{v['id']}", cambios_por_fila(v), "PATCH", "return=minimal")
+
+    def ahora():
+        return datetime.datetime.now().isoformat(timespec="seconds")
+
+    print(f"{len(grupos)} cuenta(s) por analizar, en {len(vigiladas)} lista(s)\n")
     ok = fallos = 0
 
-    for v in vigiladas:
-        u = v["username"]
-        rest(f"cuenta_vigilada?id=eq.{v['id']}", {"estado": "analizando"}, "PATCH",
-             "return=minimal")
+    for u, filas in grupos.items():
+        if u in frescas:
+            nombre = (rest(f"cuenta?select=nombre&id=eq.{urllib.parse.quote(f'externa:{u}')}") or [{}])[0].get("nombre")
+            marcar(filas, lambda v: {"estado": "listo", "ultimo_error": None,
+                                     "nombre": v.get("nombre") or nombre, "analizada_en": ahora()})
+            ok += 1
+            print(f"  ✅ @{u}: ya se leyo hoy, se usan esos datos")
+            continue
+
+        marcar(filas, lambda v: {"estado": "analizando"})
         datos, err = descubrir(u)
         if err:
             fallos += 1
-            rest(f"cuenta_vigilada?id=eq.{v['id']}",
-                 {"estado": "error", "ultimo_error": err,
-                  "analizada_en": datetime.datetime.now().isoformat(timespec="seconds")},
-                 "PATCH", "return=minimal")
+            marcar(filas, lambda v: {"estado": "error", "ultimo_error": err, "analizada_en": ahora()})
             print(f"  ✗ @{u}: {err[:110]}")
             continue
 
         cid = f"externa:{u}"
         rest("cuenta?on_conflict=id",
              [{"id": cid, "username": u, "nombre": datos.get("name"), "es_propia": False}],
-             "POST", "resolution=merge-duplicates,return=minimal")
-        rest("cuenta_metrica?on_conflict=cuenta_id,fecha_snapshot,fuente",
-             [{"cuenta_id": cid, "fecha_snapshot": hoy, "fuente": "api",
-               "seguidores": datos.get("followers_count"),
-               "publicaciones": datos.get("media_count")}],
              "POST", "resolution=merge-duplicates,return=minimal")
 
         medias = (datos.get("media") or {}).get("data", [])
@@ -217,12 +243,16 @@ def main():
                  "resolution=merge-duplicates,return=minimal")
             rest("pieza_metrica?on_conflict=post_id,fecha_snapshot,fuente", metricas, "POST",
                  "resolution=merge-duplicates,return=minimal")
+        # Al final a proposito: es la marca de "ya se leyo hoy" (ver `frescas`).
+        rest("cuenta_metrica?on_conflict=cuenta_id,fecha_snapshot,fuente",
+             [{"cuenta_id": cid, "fecha_snapshot": hoy, "fuente": "api",
+               "seguidores": datos.get("followers_count"),
+               "publicaciones": datos.get("media_count")}],
+             "POST", "resolution=merge-duplicates,return=minimal")
 
-        rest(f"cuenta_vigilada?id=eq.{v['id']}",
-             {"estado": "listo", "ultimo_error": None,
-              "nombre": v.get("nombre") or datos.get("name"),
-              "analizada_en": datetime.datetime.now().isoformat(timespec="seconds")},
-             "PATCH", "return=minimal")
+        marcar(filas, lambda v: {"estado": "listo", "ultimo_error": None,
+                                 "nombre": v.get("nombre") or datos.get("name"),
+                                 "analizada_en": ahora()})
         ok += 1
         print(f"  ✅ @{u}: {datos.get('followers_count'):,} seguidores · "
               f"{len(piezas)} piezas guardadas")
