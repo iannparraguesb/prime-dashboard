@@ -1222,12 +1222,15 @@ async function rest(recurso, { metodo = "GET", cuerpo = null, jwt, prefer } = {}
   return { ok: r.ok, estado: r.status, datos, texto };
 }
 
-async function listarCompetidores(jwt) {
+/** Cada dueño tiene su lista: la del equipo (workspace nulo) o la de un alumno.
+ *  RLS ya entrega solo la propia (0018); el filtro repite la regla aca para que
+ *  una policy mal puesta no mezcle listas en silencio. */
+async function listarCompetidores(jwt, workspaceId = null) {
   const r = await rest("cuenta_vigilada?select=*&order=agregada_en.desc", { jwt });
   if (!r.ok) {
     throw new HttpError(502, "No se pudo leer la lista de competidores.");
   }
-  const filas = r.datos ?? [];
+  const filas = (r.datos ?? []).filter((f) => (f.workspace_id ?? null) === workspaceId);
   const activos = filas.filter((f) => f.activa).length;
   return {
     filas,
@@ -1243,6 +1246,17 @@ async function listarCompetidores(jwt) {
 }
 
 const TOPE_COMPETIDORES = 5;
+
+/** Workspace del alumno segun la base (0018). Sirve de llave de paso: mientras
+ *  la migracion no este aplicada la funcion no existe y Espia responde que se
+ *  esta activando, en vez de dejar al alumno escribir contra las reglas viejas
+ *  (una sola lista, la del equipo). */
+async function workspaceEspia(jwt) {
+  const r = await rest("rpc/mi_workspace_alumno", { metodo: "POST", cuerpo: {}, jwt });
+  if (!r.ok) throw new HttpError(503, "Estamos activando Espía para tu cuenta. Vuelve a intentarlo en un rato.");
+  if (typeof r.datos !== "string" || !r.datos) throw new HttpError(403, "Conecta tu Instagram para usar Espía.");
+  return r.datos;
+}
 
 async function salud(jwt, cuentaId) {
   const sinConfig = faltaConfig();
@@ -1314,7 +1328,10 @@ async function identidad(req) {
   return { jwt, id: user.id, email: user.email ?? null, tipo: "alumno", rol: "alumno", cuentaId: vigente?.instagram_user_id ?? null, conexion: vigente ?? conexiones[0] ?? null };
 }
 
-const SECCIONES_ALUMNO = new Set(["resumen", "calendario", "piezas", "historias", "audiencia"]);
+// Lo que ve un alumno: su contenido y Espia con SUS competidores. El banco de
+// ideas, el plan, anuncios y ventas son del equipo.
+const SECCIONES_ALUMNO = new Set(["resumen", "calendario", "piezas", "historias", "competencia", "audiencia"]);
+const RUTAS_ALUMNO = new Set(["/api/salud", "/api/analisis", "/api/catalogo", "/api/cabecera", "/api/competidores"]);
 
 function yo(user) {
   const c = user.conexion;
@@ -1370,8 +1387,8 @@ async function atender(req, res) {
   if (url.pathname === "/api/yo") return json(res, yo(user));
   if (url.pathname.startsWith("/api/instagram/")) return await rutaInstagram(req, res, user, url.pathname, ENV);
   if (user.tipo === "alumno") {
-    // Un alumno solo llega a su contenido. Todo lo demas es del equipo.
-    if (!["/api/salud", "/api/analisis", "/api/catalogo", "/api/cabecera"].includes(url.pathname)) throw new HttpError(403, "Esta sección es del equipo de Prime Club.");
+    // Un alumno solo llega a su contenido y a su Espia. Todo lo demas es del equipo.
+    if (!RUTAS_ALUMNO.has(url.pathname)) throw new HttpError(403, "Esta sección es del equipo de Prime Club.");
     if (url.pathname === "/api/analisis" && !SECCIONES_ALUMNO.has(url.searchParams.get("seccion") || "")) throw new HttpError(403, "Esta sección es del equipo de Prime Club.");
     if (!cuentaId) return json(res, { error: "Conecta tu Instagram para ver tus datos." });
   } else if (!cuentaId) {
@@ -1418,7 +1435,10 @@ async function atender(req, res) {
   if (url.pathname === "/api/ideas") return await ideas(req, res, user);
   if (url.pathname === "/api/metas") return await metas(req, res, user);
   if (url.pathname === "/api/invitaciones") return await rutaInvitaciones(req, res, user, ENV);
-  if (req.method === "GET") return json(res, await listarCompetidores(jwt));
+  // Espia. El equipo comparte una lista; cada alumno tiene la suya. El dueño de
+  // cada fila lo pone la base a partir de la sesion (0018), nunca este codigo.
+  const workspaceId = user.tipo === "alumno" ? await workspaceEspia(jwt) : null;
+  if (req.method === "GET") return json(res, await listarCompetidores(jwt, workspaceId));
   if (user.rol === "lectura") throw new HttpError(403, "Tu acceso es de lectura.");
   const cuerpo = await readBody(req);
   if (req.method === "POST") {
@@ -1427,7 +1447,7 @@ async function atender(req, res) {
     if (!username) throw new HttpError(400, "Escribe un usuario o una URL de perfil de Instagram válida.");
     // Una cuenta quitada antes se reactiva en vez de duplicarse; una con error
     // se vuelve a poner en cola. Asi "agregar" sirve tambien de "reintentar".
-    const { filas, activos } = await listarCompetidores(jwt);
+    const { filas, activos } = await listarCompetidores(jwt, workspaceId);
     const existente = filas.find((f) => f.username === username);
     if (existente?.activa && existente.estado !== "error") throw new HttpError(409, `@${username} ya está en tu lista.`);
     if (!existente?.activa && activos >= TOPE_COMPETIDORES) {

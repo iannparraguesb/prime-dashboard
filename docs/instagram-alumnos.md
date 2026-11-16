@@ -10,11 +10,13 @@ En vez de agregar `workspace_id` a todas las tablas, el aislamiento se resuelve 
 
 - **Equipo** (filas en `usuario`): policies `lectura_*` con `es_autorizado()`, sin cambios. Ve todo.
 - **Alumno** (autenticado fuera de `usuario`): policies `alumno_lee` que solo SUMAN lectura sobre filas cuyo
-  `cuenta_id` está en `mis_cuentas_alumno()` (sus conexiones activas). No ve anuncios, negocio, ideas,
-  competencia ni otras cuentas. Desconectar corta el acceso.
+  `cuenta_id` está en `mis_cuentas_alumno()` (sus conexiones activas). No ve anuncios, negocio, ideas
+  ni otras cuentas. De la competencia ve solo las cuentas que él mismo vigila (ver "Espía para alumnos").
+  Desconectar corta el acceso.
 - `v_pilar_rendimiento` y `v_efecto_palabra_clave` ahora agrupan por `cuenta_id`.
 - El servidor consulta SIEMPRE una cuenta exacta (`cuenta_id=eq.`): la de Leo para el equipo, la propia para el
-  alumno. El alumno solo accede a resumen, calendario, piezas, historias, `/api/yo` y `/api/instagram/*`.
+  alumno. El alumno solo accede a resumen, calendario, piezas, historias, audiencia, Espía (`competencia` y
+  `/api/competidores`), `/api/yo` y `/api/instagram/*`.
 
 | Pieza | Dónde |
 |---|---|
@@ -50,6 +52,34 @@ si se activa, cualquiera crea una cuenta y el servidor la trata como alumno.
 | Pantallas | `src/components/Login.tsx` (modo registro), `src/views/Alumnos.tsx` |
 | Pruebas | `pruebas/invitaciones-db.test.mjs` (PGlite), `pruebas/registro.test.mjs` |
 | Seguimiento por alumno (código → cuenta → Instagram → datos) | `supabase/migrations/0017_pipeline_alumnos.sql`, tabla de Ajustes → Alumnos |
+
+## Espía para alumnos (2026-11-16)
+
+Cada alumno elige hasta 5 cuentas de su competencia, igual que Leo: agrega, quita, y el análisis parte al
+momento. Su lista es suya: no ve la de Leo ni la de otro alumno, y nadie ve la suya.
+
+- `cuenta_vigilada.workspace_id`: nulo = lista del equipo; con valor = lista de ese alumno. Lo pone un trigger
+  a partir de la sesión (`mi_workspace_alumno()`), nunca el navegador ni el servidor.
+- El tope de 5 y el "no repetir cuenta" son por dueño. Leo y varios alumnos pueden vigilar la misma cuenta.
+- Los datos de una cuenta ajena (`externa:<usuario>`) se guardan una vez. El alumno los lee solo mientras la
+  tenga activa en su lista (`mis_cuentas_espia()`): quitarla, o desconectar su Instagram, corta la lectura.
+- Una policy restrictiva (`cuenta_vigilada_ambito`) separa las listas aunque alguna policy antigua de la tabla
+  fuera más abierta: el DDL original de `cuenta_vigilada` no está en el repo.
+- La lectura a Instagram usa el token de Leo (`business_discovery`). `ig_competencia.py` pregunta una vez por
+  cuenta aunque esté en varias listas, y no repite una cuenta que ya se leyó ese día.
+- El banco de ideas sigue siendo del equipo: el alumno no ve "Guardar idea".
+
+| Pieza | Dónde |
+|---|---|
+| Migración | `supabase/migrations/0018_espia_alumnos.sql` |
+| Ruta | `/api/competidores` y `seccion=competencia` en `server.mjs` |
+| Ingesta | `ingesta/tools/ig_competencia.py` (`competencia.yml` al agregar, `sync-diario.yml` a diario) |
+| Pruebas | `pruebas/espia-alumnos-db.test.mjs` (PGlite), `pruebas/competidores.test.mjs` |
+
+**Para activarlo:** aplicar 0018 en el editor SQL de Supabase. Se puede aplicar antes o después del deploy:
+para el equipo no cambia nada, y mientras falte, Espía le responde al alumno "Estamos activando Espía para tu
+cuenta" en vez de dejarlo escribir. El análisis inmediato necesita `GH_WORKFLOW_TOKEN` y `GH_REPO` en Vercel
+(los mismos que ya usa Leo); sin ellos la cuenta espera a la sincronización diaria.
 
 ## Piloto con alumnos testers (app de Meta en modo desarrollo)
 
